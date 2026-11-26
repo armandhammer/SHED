@@ -1,57 +1,71 @@
-// Editor panels for the Ambika patch and part.
+// The Ambika patch and part, laid out as one instrument panel: oscillators,
+// mixer, two filters with response graphs, LFOs, three envelope rows with
+// graphs and faders, the modulation matrix and modifiers, part and arp.
 
-import { MOD_DESTINATIONS, MOD_SOURCES, param } from '../model/params/ambika';
-import { control, select, segmented, slider, toggle, type ControlRegistry } from './controls';
+import { MOD_SOURCES, param } from '../model/params/ambika';
+import { fader, knob, leds, ledToggle, menu, type ControlRegistry, type KnobSize } from './controls';
 import { cssVar, fitCanvas, h } from './dom';
 import { cutoffHz, envelopeLayout, envelopeShape, resonanceQ, svfMagnitudeDb, type SvfMode } from './viz-math';
 
 const p = param;
 
-function card(title: string, ...children: (HTMLElement | null)[]): HTMLElement {
-  return h('section', { class: 'card' }, h('h3', {}, title), ...children);
-}
+type Accent = 'osc' | 'mix' | 'filter' | 'lfo' | 'env' | 'mod' | 'part';
 
-function section(id: string, title: string, ...children: HTMLElement[]): HTMLElement {
-  return h('section', { class: 'panel', id }, h('h2', {}, title), h('div', { class: 'cards' }, ...children));
-}
-
-/** Adds a tooltip to a control's name (the control itself shows its NRPN/CC). */
-function withTitle(el: HTMLElement, title: string): HTMLElement {
-  const name = el.querySelector<HTMLElement>('.ctl-name');
-  (name ?? el).title = title;
-  return el;
-}
-
-// ---------------------------------------------------------------------------
-
-export function voicePanel(reg: ControlRegistry): HTMLElement {
-  const osc = (n: 1 | 2) =>
-    card(
-      `Oscillator ${n}`,
-      select(reg, p(`osc${n}.shape`), 'Shape'),
-      slider(reg, p(`osc${n}.param`), 'Parameter'),
-      slider(reg, p(`osc${n}.range`), 'Range (semitones)'),
-      slider(reg, p(`osc${n}.detune`), 'Detune'),
-    );
-  const mixer = card(
-    'Mixer',
-    slider(reg, p('mix.balance'), 'Osc 1 ↔ 2'),
-    select(reg, p('mix.operator'), 'Crossmod'),
-    slider(reg, p('mix.param'), 'Crossmod amount'),
-    select(reg, p('mix.subShape'), 'Sub osc shape'),
-    slider(reg, p('mix.sub'), 'Sub osc'),
-    slider(reg, p('mix.noise'), 'Noise'),
-    slider(reg, p('mix.fuzz'), 'Fuzz'),
-    slider(reg, p('mix.crush'), 'Crush'),
+/** A panel section: heading with a coloured rule, spanning `span` of 12 columns. */
+function section(accent: Accent, title: string, span: number, note: string | HTMLElement | null, ...children: (HTMLElement | null)[]): HTMLElement {
+  return h(
+    'section',
+    { class: `sec sec-${accent}`, style: `--span: ${span}` },
+    h('h2', {}, h('span', {}, title), note ? h('span', { class: 'sec-note' }, note) : null),
+    ...children,
   );
-  return section('voice', 'Oscillators & mixer', osc(1), osc(2), mixer);
+}
+
+const row = (cls: string, ...children: (HTMLElement | null)[]) => h('div', { class: cls }, ...children);
+
+const k = (reg: ControlRegistry, id: string, label: string, size: KnobSize = 'md') => knob(reg, p(id), label, size);
+
+// ---------------------------------------------------------------------------
+// Oscillators and mixer
+
+function oscillator(reg: ControlRegistry, n: 1 | 2): HTMLElement {
+  return section(
+    'osc',
+    `Oscillator ${n}`,
+    3,
+    null,
+    row('controls menus', menu(reg, p(`osc${n}.shape`), 'Wave')),
+    row('controls', k(reg, `osc${n}.param`, 'Param'), k(reg, `osc${n}.range`, 'Range'), k(reg, `osc${n}.detune`, 'Detune')),
+  );
+}
+
+function mixer(reg: ControlRegistry): HTMLElement {
+  return section(
+    'mix',
+    'Mixer',
+    6,
+    null,
+    row('controls menus', menu(reg, p('mix.operator'), 'Crossmod'), menu(reg, p('mix.subShape'), 'Sub wave')),
+    row(
+      'controls',
+      k(reg, 'mix.balance', 'Osc 1·2'),
+      k(reg, 'mix.param', 'Xmod amt'),
+      k(reg, 'mix.sub', 'Sub'),
+      k(reg, 'mix.noise', 'Noise'),
+      k(reg, 'mix.fuzz', 'Fuzz'),
+      k(reg, 'mix.crush', 'Crush'),
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------
+// Filters
 
-function filterResponse(reg: ControlRegistry): HTMLElement {
-  const canvas = h('canvas', { class: 'viz viz-filter', 'aria-label': 'Filter response' });
-  const legend = h('div', { class: 'viz-legend' });
+/** Response graph of one filter stage, drawn in the display's teal. */
+function filterGraph(reg: ControlRegistry, n: 1 | 2): HTMLElement {
+  const canvas = h('canvas', { class: 'graph graph-filter', role: 'img' });
+  const label = h('span', { class: 'screen-label' });
+  const ids = [`filter${n}.mode`, `filter${n}.cutoff`, `filter${n}.resonance`];
   const draw = () => {
     if (!canvas.isConnected) return;
     const ctx = fitCanvas(canvas);
@@ -63,103 +77,135 @@ function filterResponse(reg: ControlRegistry): HTMLElement {
     const xOf = (f: number) => (Math.log(f / fMin) / Math.log(fMax / fMin)) * w;
     const yOf = (db: number) => ((maxDb - db) / (maxDb - minDb)) * hh;
     ctx.clearRect(0, 0, w, hh);
-    // Grid: decades and 0 dB.
-    ctx.strokeStyle = cssVar('--grid');
+    ctx.strokeStyle = cssVar('--screen-grid');
     ctx.lineWidth = 1;
     ctx.beginPath();
     for (const f of [100, 1000, 10000]) {
-      ctx.moveTo(xOf(f), 0);
-      ctx.lineTo(xOf(f), hh);
+      ctx.moveTo(Math.round(xOf(f)) + 0.5, 0);
+      ctx.lineTo(Math.round(xOf(f)) + 0.5, hh);
     }
-    ctx.moveTo(0, yOf(0));
-    ctx.lineTo(w, yOf(0));
+    ctx.moveTo(0, Math.round(yOf(0)) + 0.5);
+    ctx.lineTo(w, Math.round(yOf(0)) + 0.5);
     ctx.stroke();
-    ctx.fillStyle = cssVar('--muted');
-    ctx.font = '10px system-ui, sans-serif';
-    ctx.fillText('100', xOf(100) + 3, hh - 4);
-    ctx.fillText('1k', xOf(1000) + 3, hh - 4);
-    ctx.fillText('10k', xOf(10000) + 3, hh - 4);
-    ctx.fillText('0 dB', 3, yOf(0) - 3);
 
-    const curve = (mode: SvfMode, cutoff: number, reso: number, color: string, width: number, fill: boolean) => {
-      const fc = cutoffHz(cutoff);
-      const q = resonanceQ(reso);
-      ctx.beginPath();
-      for (let x = 0; x <= w; x += 1) {
-        const f = fMin * Math.pow(fMax / fMin, x / w);
-        const y = yOf(Math.max(minDb - 6, svfMagnitudeDb(mode, f, fc, q)));
-        if (x === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.strokeStyle = color;
-      ctx.lineWidth = width;
-      ctx.stroke();
-      if (fill) {
-        ctx.lineTo(w, hh);
-        ctx.lineTo(0, hh);
-        ctx.closePath();
-        ctx.globalAlpha = 0.12;
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.globalAlpha = 1;
-      }
-    };
-    const v = (id: string) => reg.value(p(id));
-    curve(v('filter2.mode') as SvfMode, v('filter2.cutoff'), v('filter2.resonance'), cssVar('--accent-2'), 1.25, false);
-    curve(v('filter1.mode') as SvfMode, v('filter1.cutoff'), v('filter1.resonance'), cssVar('--accent'), 2, true);
-    legend.replaceChildren(
-      h('span', { class: 'swatch s1' }), `Filter 1 · ${Math.round(cutoffHz(v('filter1.cutoff')))} Hz  `,
-      h('span', { class: 'swatch s2' }), `Filter 2 · ${Math.round(cutoffHz(v('filter2.cutoff')))} Hz`,
-    );
+    const mode = reg.value(p(ids[0])) as SvfMode;
+    const cutoff = reg.value(p(ids[1]));
+    const reso = reg.value(p(ids[2]));
+    const fc = cutoffHz(cutoff);
+    const q = resonanceQ(reso);
+    const teal = cssVar('--vfd');
+    // Cutoff marker.
+    ctx.strokeStyle = cssVar('--vfd-dim');
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath();
+    ctx.moveTo(Math.round(xOf(fc)) + 0.5, 0);
+    ctx.lineTo(Math.round(xOf(fc)) + 0.5, hh);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Curve with a soft glow and a faint fill.
+    ctx.beginPath();
+    for (let x = 0; x <= w; x += 1) {
+      const f = fMin * Math.pow(fMax / fMin, x / w);
+      const y = yOf(Math.max(minDb - 6, svfMagnitudeDb(mode, f, fc, q)));
+      if (x === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.shadowColor = teal;
+    ctx.shadowBlur = 6;
+    ctx.strokeStyle = teal;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.lineTo(w, hh);
+    ctx.lineTo(0, hh);
+    ctx.closePath();
+    ctx.globalAlpha = 0.1;
+    ctx.fillStyle = teal;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    const hz = fc >= 1000 ? `${(fc / 1000).toFixed(1)} kHz` : `${Math.round(fc)} Hz`;
+    const modeName = ['LP', 'BP', 'HP', 'Notch'][mode] ?? '';
+    label.textContent = `${modeName} · ${hz}`;
+    canvas.setAttribute('aria-label', `Filter ${n} response: ${modeName}, cutoff about ${hz}, resonance ${reso}`);
   };
-  for (const id of ['filter1.cutoff', 'filter1.resonance', 'filter1.mode', 'filter2.cutoff', 'filter2.resonance', 'filter2.mode']) {
-    reg.register(p(id).address, () => requestAnimationFrame(draw));
-  }
+  for (const id of ids) reg.register(p(id).address, () => requestAnimationFrame(draw));
   new ResizeObserver(() => draw()).observe(canvas);
-  return h(
-    'figure',
-    { class: 'viz-wrap' },
-    canvas,
-    h('figcaption', {}, legend, h('span', { class: 'muted' }, 'Ideal 2-pole SVF response; frequency scale is approximate.')),
-  );
+  return h('div', { class: 'screen screen-filter' }, canvas, label);
 }
 
-export function filterPanel(reg: ControlRegistry): HTMLElement {
-  const main = card(
-    'Filter 1',
-    filterResponse(reg),
-    segmented(reg, p('filter1.mode'), 'Mode'),
-    slider(reg, p('filter1.cutoff'), 'Cutoff'),
-    slider(reg, p('filter1.resonance'), 'Resonance'),
+function filter(reg: ControlRegistry, n: 1 | 2): HTMLElement {
+  const main = row(
+    'filter-main',
+    h('div', { class: 'filter-left' }, filterGraph(reg, n), leds(reg, p(`filter${n}.mode`), 'Mode', { hideLabel: true })),
+    row('filter-knobs', k(reg, `filter${n}.cutoff`, 'Cutoff', 'lg'), k(reg, `filter${n}.resonance`, 'Resonance', 'lg')),
   );
-  const mod = card(
-    'Cutoff modulation',
-    slider(reg, p('filter.env'), 'Env 2 amount'),
-    slider(reg, p('filter.lfo'), 'LFO 2 amount'),
-    slider(reg, p('filter.velocity'), 'Velocity'),
-    slider(reg, p('filter.keytrack'), 'Key tracking'),
-  );
-  const second = card(
-    'Filter 2',
-    h('p', { class: 'hint' }, 'Second filter stage, on voicecards that have one.'),
-    segmented(reg, p('filter2.mode'), 'Mode'),
-    slider(reg, p('filter2.cutoff'), 'Cutoff'),
-    slider(reg, p('filter2.resonance'), 'Resonance'),
-  );
-  return section('filter', 'Filter', main, mod, second);
+  const mod =
+    n === 1
+      ? row('filter-mod', k(reg, 'filter.env', 'Env 2', 'lg'), k(reg, 'filter.lfo', 'LFO 2', 'lg'), k(reg, 'filter.velocity', 'Velocity', 'lg'), k(reg, 'filter.keytrack', 'Key track', 'lg'))
+      : null;
+  return section('filter', `Filter ${n}`, 6, n === 2 ? '2nd-stage voicecards' : null, main, mod);
 }
 
 // ---------------------------------------------------------------------------
+// LFOs
 
-function envelopeEditor(reg: ControlRegistry, n: number): HTMLElement {
-  const ids = ['attack', 'decay', 'sustain', 'release', 'curve'].map((k) => p(`env${n}.${k}`));
+const LFO_GLYPHS: Record<string, string> = {
+  triangle: 'M0 12 L14 2 L42 22 L56 12',
+  square: 'M0 20 V4 H28 V20 H56',
+  's&h': 'M0 16 H10 V6 H20 V19 H30 V9 H40 V14 H50 V4 H56',
+  ramp: 'M0 22 L56 2',
+  sine: 'M0 12 Q7 -6 14 12 T28 12 T42 12 T56 12',
+};
+
+/** Small waveform picture for the common LFO shapes (none for the rest). */
+function lfoGlyph(reg: ControlRegistry, id: string): HTMLElement {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 56 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.classList.add('lfo-glyph');
+  const path = document.createElementNS(NS, 'path');
+  svg.append(path);
+  const def = p(id);
+  reg.register(def.address, () => {
+    const name = def.labels?.[reg.value(def) - def.min] ?? '';
+    const d = LFO_GLYPHS[name];
+    path.setAttribute('d', d ?? '');
+    svg.style.display = d ? '' : 'none';
+  });
+  return svg as unknown as HTMLElement;
+}
+
+function lfoCard(reg: ControlRegistry, n: 1 | 2 | 3 | 4): HTMLElement {
+  const name = n === 4 ? 'Voice' : `LFO ${n}`;
+  const shape = menu(reg, p(`lfo${n}.shape`), `${name} shape`, { hideLabel: true, adornment: lfoGlyph(reg, `lfo${n}.shape`) });
+  const extra = n === 4 ? k(reg, 'voice.vintage', 'Vintage', 'sm') : leds(reg, p(`lfo${n}.sync`), 'Trigger', { hideLabel: true, small: true });
+  return h(
+    'div',
+    { class: 'lfo-card' },
+    k(reg, `lfo${n}.rate`, 'Rate', 'sm'),
+    h('div', { class: 'lfo-body' }, h('div', { class: 'lfo-head' }, h('span', { class: 'lfo-name' }, name), shape), extra),
+  );
+}
+
+function lfos(reg: ControlRegistry): HTMLElement {
+  return section('lfo', 'LFOs', 12, null, row('lfo-row', lfoCard(reg, 1), lfoCard(reg, 2), lfoCard(reg, 3), lfoCard(reg, 4)));
+}
+
+// ---------------------------------------------------------------------------
+// Envelopes
+
+/** Envelope graph; drag the attack peak, decay/sustain point and release end. */
+function envelopeGraph(reg: ControlRegistry, n: number): HTMLElement {
+  const ids = ['attack', 'decay', 'sustain', 'release', 'curve'].map((key) => p(`env${n}.${key}`));
   const [A, D, S, R, C] = ids;
-  const canvas = h('canvas', { class: 'viz viz-env', 'aria-label': `Envelope ${n}`, tabindex: -1 });
+  const canvas = h('canvas', { class: 'graph graph-env', role: 'img', 'aria-label': `Envelope ${n} shape; drag its points to edit` });
   let dragging: number | null = null;
 
   const layout = () => {
     const { width, height } = canvas.getBoundingClientRect();
-    return envelopeLayout(reg.value(A), reg.value(D), reg.value(S), reg.value(R), width, height);
+    return envelopeLayout(reg.value(A), reg.value(D), reg.value(S), reg.value(R), width, height, 10);
   };
 
   const draw = () => {
@@ -167,6 +213,18 @@ function envelopeEditor(reg: ControlRegistry, n: number): HTMLElement {
     const ctx = fitCanvas(canvas);
     const { width: w, height: hh } = canvas.getBoundingClientRect();
     ctx.clearRect(0, 0, w, hh);
+    ctx.strokeStyle = cssVar('--screen-grid');
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 1; i < 4; i++) {
+      const x = Math.round((w * i) / 4) + 0.5;
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, hh);
+    }
+    ctx.moveTo(0, hh - 10.5);
+    ctx.lineTo(w, hh - 10.5);
+    ctx.stroke();
+
     const pts = layout().points;
     const curve = reg.engine.supports(C) ? reg.value(C) : 0;
     const seg = (a: { x: number; y: number }, b: { x: number; y: number }, shaped: boolean) => {
@@ -177,36 +235,39 @@ function envelopeEditor(reg: ControlRegistry, n: number): HTMLElement {
         ctx.lineTo(a.x + (b.x - a.x) * x, a.y + (b.y - a.y) * t);
       }
     };
+    const teal = cssVar('--vfd');
     ctx.beginPath();
     ctx.moveTo(pts[0].x, pts[0].y);
     seg(pts[0], pts[1], true);
     seg(pts[1], pts[2], true);
     seg(pts[2], pts[3], false);
     seg(pts[3], pts[4], true);
-    ctx.strokeStyle = cssVar('--accent');
+    ctx.shadowColor = teal;
+    ctx.shadowBlur = 6;
+    ctx.strokeStyle = teal;
     ctx.lineWidth = 2;
     ctx.stroke();
+    ctx.shadowBlur = 0;
     ctx.lineTo(pts[0].x, pts[0].y);
-    ctx.globalAlpha = 0.12;
-    ctx.fillStyle = cssVar('--accent');
+    ctx.globalAlpha = 0.1;
+    ctx.fillStyle = teal;
     ctx.fill();
     ctx.globalAlpha = 1;
-    ctx.fillStyle = cssVar('--fg');
+    ctx.fillStyle = teal;
     for (const i of [1, 2, 4]) {
       ctx.beginPath();
-      ctx.arc(pts[i].x, pts[i].y, i === dragging ? 5 : 4, 0, Math.PI * 2);
+      ctx.arc(pts[i].x, pts[i].y, i === dragging ? 5 : 3.5, 0, Math.PI * 2);
       ctx.fill();
     }
   };
 
-  // Drag the attack peak (time), decay/sustain point (time + level) and release end (time).
   canvas.addEventListener('pointerdown', (e) => {
     const r = canvas.getBoundingClientRect();
     const x = e.clientX - r.left;
     const y = e.clientY - r.top;
     const pts = layout().points;
     let best: number | null = null;
-    let bestD = 14;
+    let bestD = 16;
     for (const i of [1, 2, 3, 4]) {
       const d = Math.hypot(pts[i].x - x, pts[i].y - y);
       if (d < bestD) {
@@ -226,9 +287,9 @@ function envelopeEditor(reg: ControlRegistry, n: number): HTMLElement {
     const x = e.clientX - r.left;
     const y = e.clientY - r.top;
     const pts = layout().points;
-    const seg = (r.width - 12) * 0.26;
-    const toTime = (dx: number) => Math.round(((dx - 2) / seg) * 127);
-    const toLevel = (yy: number) => Math.round(((r.height - 6 - yy) / (r.height - 12)) * 127);
+    const segW = (r.width - 20) * 0.26;
+    const toTime = (dx: number) => Math.round(((dx - 2) / segW) * 127);
+    const toLevel = (yy: number) => Math.round(((r.height - 10 - yy) / (r.height - 20)) * 127);
     if (dragging === 1) reg.set(A, toTime(x - pts[0].x));
     if (dragging === 2) {
       reg.set(D, toTime(x - pts[1].x));
@@ -249,113 +310,128 @@ function envelopeEditor(reg: ControlRegistry, n: number): HTMLElement {
   for (const d of ids) reg.register(d.address, () => requestAnimationFrame(draw));
   reg.registerAvailability(() => requestAnimationFrame(draw));
   new ResizeObserver(() => draw()).observe(canvas);
-  return canvas;
+  return h('div', { class: 'screen screen-env' }, canvas);
 }
 
-export function envelopePanel(reg: ControlRegistry): HTMLElement {
-  const env = (n: number) =>
-    card(
-      `Envelope ${n}${n === 2 ? ' · filter' : n === 3 ? ' · amp' : ''}`,
-      envelopeEditor(reg, n),
-      slider(reg, p(`env${n}.attack`), 'Attack'),
-      slider(reg, p(`env${n}.decay`), 'Decay'),
-      slider(reg, p(`env${n}.sustain`), 'Sustain'),
-      slider(reg, p(`env${n}.release`), 'Release'),
-      withTitle(slider(reg, p(`env${n}.curve`), 'Curve'), '0 = exponential (YAM), 64 = linear, 127 = inverse exponential'),
-    );
-  return section('envelopes', 'Envelopes', env(1), env(2), env(3));
-}
-
-// ---------------------------------------------------------------------------
-
-export function lfoPanel(reg: ControlRegistry): HTMLElement {
-  const lfo = (n: number) =>
-    card(
-      `LFO ${n}`,
-      select(reg, p(`lfo${n}.shape`), 'Shape'),
-      slider(reg, p(`lfo${n}.rate`), 'Rate'),
-      segmented(reg, p(`lfo${n}.sync`), 'Trigger'),
-    );
-  const voice = card(
-    'Voice LFO (LFO 4) & voice',
-    segmented(reg, p('lfo4.shape'), 'Shape'),
-    slider(reg, p('lfo4.rate'), 'Rate'),
-    slider(reg, p('voice.vintage'), 'Vintage'),
+function envelope(reg: ControlRegistry, n: number): HTMLElement {
+  const role = n === 1 ? 'Mod' : n === 2 ? 'Filter' : 'Amp';
+  const curve = fader(reg, p(`env${n}.curve`), 'C');
+  curve.querySelector('.ctl-name')!.setAttribute('title', 'Curve: 0 = exponential (YAM), 64 = linear, 127 = inverse exponential');
+  return section(
+    'env',
+    `Env ${n}`,
+    12,
+    role,
+    row(
+      'env-row',
+      envelopeGraph(reg, n),
+      row('faders', fader(reg, p(`env${n}.attack`), 'A'), fader(reg, p(`env${n}.decay`), 'D'), fader(reg, p(`env${n}.sustain`), 'S'), fader(reg, p(`env${n}.release`), 'R'), curve),
+    ),
   );
-  return section('lfos', 'LFOs', lfo(1), lfo(2), lfo(3), voice);
 }
 
 // ---------------------------------------------------------------------------
+// Modulation
 
-export function matrixPanel(reg: ControlRegistry): HTMLElement {
-  const rows: HTMLElement[] = [];
-  for (let i = 1; i <= 14; i++) {
-    const src = p(`mod${i}.source`);
-    const dst = p(`mod${i}.destination`);
-    const amt = p(`mod${i}.amount`);
-    const row = h(
-      'div',
-      { class: 'mod-row' },
-      h('span', { class: 'mod-index' }, String(i)),
-      select(reg, src, 'Source'),
-      h('span', { class: 'mod-arrow', 'aria-hidden': 'true' }, '→'),
-      select(reg, dst, 'Destination'),
-      slider(reg, amt, 'Amount'),
-    );
-    reg.register(amt.address, () => row.classList.toggle('inactive', reg.value(amt) === 0));
-    rows.push(row);
-  }
-  const matrix = h('section', { class: 'card card-wide' }, h('h3', {}, 'Modulation matrix'), h('div', { class: 'mod-grid' }, ...rows));
-
-  const mods: HTMLElement[] = [];
-  for (let i = 1; i <= 4; i++) {
-    const op = p(`modifier${i}.operator`);
-    const row = h(
-      'div',
-      { class: 'modifier-row' },
-      h('span', { class: 'mod-index' }, `mod ${i}`),
-      select(reg, p(`modifier${i}.in1`), 'Input 1'),
-      select(reg, op, 'Operator'),
-      select(reg, p(`modifier${i}.in2`), 'Input 2'),
-    );
-    reg.register(op.address, () => row.classList.toggle('inactive', reg.value(op) === 0));
-    mods.push(row);
-  }
-  const modifiers = h(
-    'section',
-    { class: 'card card-wide' },
-    h('h3', {}, 'Modifiers'),
-    h('p', { class: 'hint' }, `Outputs appear as sources “${MOD_SOURCES[7]}” … “${MOD_SOURCES[10]}”. Destinations: ${MOD_DESTINATIONS.length}.`),
-    h('div', { class: 'modifier-grid' }, ...mods),
+function modSlot(reg: ControlRegistry, i: number): HTMLElement {
+  const amt = p(`mod${i}.amount`);
+  const slot = h(
+    'div',
+    { class: 'mod-slot' },
+    h('span', { class: 'mod-index' }, String(i)),
+    menu(reg, p(`mod${i}.source`), `Slot ${i} source`, { hideLabel: true, compact: true }),
+    h('span', { class: 'mod-arrow', 'aria-hidden': 'true' }, '▼'),
+    menu(reg, p(`mod${i}.destination`), `Slot ${i} destination`, { hideLabel: true, compact: true }),
+    knob(reg, amt, `Slot ${i} amount`, 'sm'),
   );
-  return section('matrix', 'Modulation', matrix, modifiers);
+  reg.register(amt.address, () => slot.classList.toggle('inactive', reg.value(amt) === 0));
+  return slot;
+}
+
+function modifierSlot(reg: ControlRegistry, i: number): HTMLElement {
+  const op = p(`modifier${i}.operator`);
+  const slot = h(
+    'div',
+    { class: 'modifier-slot' },
+    h('span', { class: 'mod-index' }, `Mod ${i}`),
+    menu(reg, p(`modifier${i}.in1`), 'In 1', { compact: true }),
+    menu(reg, op, 'Operator', { compact: true }),
+    menu(reg, p(`modifier${i}.in2`), 'In 2', { compact: true }),
+  );
+  reg.register(op.address, () => slot.classList.toggle('inactive', reg.value(op) === 0));
+  return slot;
+}
+
+function modulation(reg: ControlRegistry): HTMLElement {
+  const slots: HTMLElement[] = [];
+  for (let i = 1; i <= 14; i++) slots.push(modSlot(reg, i));
+  const modifiers: HTMLElement[] = [];
+  for (let i = 1; i <= 4; i++) modifiers.push(modifierSlot(reg, i));
+  return section(
+    'mod',
+    'Modulation',
+    12,
+    '14 slots · source / destination / amount',
+    h('div', { class: 'mod-grid' }, ...slots),
+    h('h3', { class: 'sub-heading' }, h('span', {}, 'Modifiers'), h('span', { class: 'sec-note' }, `outputs are sources “${MOD_SOURCES[7]}” … “${MOD_SOURCES[10]}”`)),
+    h('div', { class: 'modifier-grid' }, ...modifiers),
+  );
 }
 
 // ---------------------------------------------------------------------------
+// Part and arpeggiator
 
-export function partPanel(reg: ControlRegistry, mappingInfo: HTMLElement): HTMLElement {
-  const settings = card(
+function part(reg: ControlRegistry, mappingInfo: HTMLElement): HTMLElement {
+  return section(
+    'part',
     'Part',
-    slider(reg, p('part.volume'), 'Volume'),
-    slider(reg, p('part.octave'), 'Octave'),
-    slider(reg, p('part.tuning'), 'Tuning'),
-    select(reg, p('part.polyphony'), 'Voice mode'),
-    slider(reg, p('part.spread'), 'Spread'),
-    segmented(reg, p('part.spreadMode'), 'Spread mode'),
-    toggle(reg, p('part.legato'), 'Legato'),
-    slider(reg, p('part.portamento'), 'Portamento'),
-    select(reg, p('part.raga'), 'Raga'),
+    7,
+    mappingInfo,
+    row(
+      'controls',
+      menu(reg, p('part.polyphony'), 'Voice mode'),
+      menu(reg, p('part.raga'), 'Raga'),
+      leds(reg, p('part.spreadMode'), 'Spread mode'),
+      ledToggle(reg, p('part.legato'), 'Legato'),
+    ),
+    row('controls', k(reg, 'part.volume', 'Volume'), k(reg, 'part.octave', 'Octave'), k(reg, 'part.tuning', 'Tuning'), k(reg, 'part.spread', 'Spread'), k(reg, 'part.portamento', 'Glide')),
   );
-  const arp = card(
-    'Arpeggiator',
-    segmented(reg, p('arp.mode'), 'Mode'),
-    select(reg, p('arp.direction'), 'Direction'),
-    slider(reg, p('arp.octave'), 'Range (octaves)'),
-    slider(reg, p('arp.pattern'), 'Pattern'),
-    select(reg, p('arp.resolution'), 'Grid'),
-    control(reg, p('seq.length1'), 'Seq 1 length'),
-    control(reg, p('seq.length2'), 'Seq 2 length'),
-    control(reg, p('seq.length3'), 'Pattern length'),
+}
+
+function arp(reg: ControlRegistry): HTMLElement {
+  return section(
+    'part',
+    'Arp / Sequencer',
+    5,
+    null,
+    row('controls', leds(reg, p('arp.mode'), 'Mode'), menu(reg, p('arp.direction'), 'Direction'), menu(reg, p('arp.resolution'), 'Grid')),
+    row(
+      'controls',
+      k(reg, 'arp.octave', 'Range', 'sm'),
+      k(reg, 'arp.pattern', 'Pattern', 'sm'),
+      k(reg, 'seq.length1', 'Seq 1', 'sm'),
+      k(reg, 'seq.length2', 'Seq 2', 'sm'),
+      k(reg, 'seq.length3', 'Patt len', 'sm'),
+    ),
   );
-  return section('part', 'Part settings', settings, arp, card('MIDI & voices', mappingInfo));
+}
+
+/** Every section of the panel, in reading order. */
+export function instrumentPanel(reg: ControlRegistry, mappingInfo: HTMLElement): HTMLElement {
+  return h(
+    'div',
+    { class: 'panel-grid' },
+    oscillator(reg, 1),
+    oscillator(reg, 2),
+    mixer(reg),
+    filter(reg, 1),
+    filter(reg, 2),
+    lfos(reg),
+    envelope(reg, 1),
+    envelope(reg, 2),
+    envelope(reg, 3),
+    modulation(reg),
+    part(reg, mappingInfo),
+    arp(reg),
+  );
 }

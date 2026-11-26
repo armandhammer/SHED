@@ -2,7 +2,8 @@
 // editor panels, librarian and log.
 
 import { MidiAccess } from '../midi/access';
-import { initPatch, NUM_PARTS, txChannel, type PartMapping } from '../model/params/ambika';
+import { initPatch, NUM_PARTS, paramAt, txChannel, type PartMapping } from '../model/params/ambika';
+import { formatValue } from '../model/params/types';
 import { formatLocation, StorageObject, versionString } from '../protocol/ambika';
 import { RequestTimeout } from '../protocol/client';
 import { createVirtualMidi, virtualSetupFromQuery } from '../sim/virtual-midi';
@@ -10,7 +11,7 @@ import { SyncEngine } from '../sync/engine';
 import { ControlRegistry } from './controls';
 import { clear, h } from './dom';
 import { librarianPanel } from './librarian';
-import { envelopePanel, filterPanel, lfoPanel, matrixPanel, partPanel, voicePanel } from './panels';
+import { instrumentPanel } from './panels';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const noteName = (n: number) => `${NOTE_NAMES[n % 12]}${Math.floor(n / 12) - 1}`;
@@ -23,7 +24,14 @@ export function startApp(root: HTMLElement): void {
   if (virtual) (window as unknown as { virtualAmbika: unknown }).virtualAmbika = virtual.synth;
   let selected = 0;
   const names: string[] = new Array(NUM_PARTS).fill('');
-  const engine = new SyncEngine({ send: (b) => midi.send(b) });
+  const locations: string[] = new Array(NUM_PARTS).fill('');
+  const engine = new SyncEngine({
+    send: (b) => {
+      const ok = midi.send(b);
+      if (ok) blink(outLed);
+      return ok;
+    },
+  });
   const reg = new ControlRegistry(engine, () => selected);
 
   // ---- Log ---------------------------------------------------------------
@@ -35,93 +43,116 @@ export function startApp(root: HTMLElement): void {
   };
   engine.on('log', ({ level, text }) => log(level, text));
 
-  // ---- Header ------------------------------------------------------------
+  // ---- Connection strip (above the instrument) -----------------------------
   const connectBtn = h('button', { type: 'button', class: 'primary' }, 'Connect MIDI');
   const inSel = h('select', { 'aria-label': 'MIDI input' });
   const outSel = h('select', { 'aria-label': 'MIDI output' });
   const fwBadge = h('span', { class: 'fw-badge', title: 'Firmware detected with the version request (SysEx 0x1c)' }, 'not connected');
   const led = h('span', { class: 'led off', title: 'Link status' });
-  const queueInfo = h('span', { class: 'queue muted' });
-  const partTabs = h('nav', { class: 'part-tabs', 'aria-label': 'Part' });
+  const queueInfo = h('span', { class: 'queue' });
+  const strip = h(
+    'div',
+    { class: 'conn-strip' },
+    connectBtn,
+    h('label', {}, 'In ', inSel),
+    h('label', {}, 'Out ', outSel),
+    led,
+    fwBadge,
+    queueInfo,
+  );
+  const notices = h('div', { class: 'notices' });
+
+  // ---- Instrument header: name, display, part keys, actions ----------------
+  const vfdTop = h('div', { class: 'vfd-line vfd-main' });
+  const vfdBottom = h('div', { class: 'vfd-line vfd-sub' });
+  const vfd = h('div', { class: 'vfd', role: 'status', 'aria-live': 'polite' }, vfdTop, vfdBottom);
+  const partKeys = h('div', { class: 'part-keys', role: 'tablist', 'aria-label': 'Part' });
   const partButtons: HTMLButtonElement[] = [];
   for (let i = 0; i < NUM_PARTS; i++) {
-    const b = h('button', { type: 'button', role: 'tab', onclick: () => selectPart(i) }, String(i + 1));
+    const b = h('button', { type: 'button', role: 'tab', class: 'part-key', onclick: () => selectPart(i), title: `Part ${i + 1}` }, String(i + 1));
     partButtons.push(b);
-    partTabs.append(b);
+    partKeys.append(b);
   }
-  const pullBtn = h('button', { type: 'button', title: 'Request patch + part of the selected part (SysEx 0x13)' }, 'Pull part');
-  const pullAllBtn = h('button', { type: 'button', title: 'Request the multi with all six parts (SysEx 0x14)' }, 'Pull all');
-  const pushBtn = h('button', { type: 'button', title: 'Send the whole patch of the selected part (SysEx 0x01)' }, 'Push patch');
-  const initBtn = h('button', { type: 'button', title: 'Reset the selected part to the YAM init patch and send it' }, 'Init patch');
-  const partTitle = h('span', { class: 'part-title' });
-
-  const notices = h('div', { class: 'notices' });
+  const action = (label: string, title: string) => h('button', { type: 'button', class: 'panel-btn', title }, label);
+  const pullBtn = action('Pull', 'Request patch + part of the selected part (SysEx 0x13)');
+  const pullAllBtn = action('Pull all', 'Request the multi with all six parts (SysEx 0x14)');
+  const pushBtn = action('Push', 'Send the whole patch of the selected part (SysEx 0x01)');
+  const initBtn = action('Init', 'Reset the selected part to the YAM init patch and send it');
+  const libraryBtn = action('Library', 'Jump to the librarian');
+  libraryBtn.addEventListener('click', () => document.getElementById('librarian')?.scrollIntoView({ behavior: 'smooth' }));
 
   const header = h(
     'header',
-    { class: 'topbar' },
-    h('div', { class: 'brand' }, h('strong', {}, 'SHED'), h('span', { class: 'muted' }, ' Ambika editor')),
-    h(
-      'div',
-      { class: 'midi-ports' },
-      connectBtn,
-      h('label', {}, 'In ', inSel),
-      h('label', {}, 'Out ', outSel),
-      led,
-      fwBadge,
-      queueInfo,
-    ),
-    h('div', { class: 'part-bar' }, h('span', { class: 'muted' }, 'Part'), partTabs, partTitle),
-    h('div', { class: 'actions' }, pullBtn, pullAllBtn, pushBtn, initBtn),
+    { class: 'panel-header' },
+    h('div', { class: 'brand' }, h('div', { class: 'brand-name' }, 'SHED'), h('div', { class: 'brand-sub' }, 'Six-part hybrid poly editor')),
+    vfd,
+    h('div', { class: 'header-right' }, partKeys, h('div', { class: 'panel-actions' }, pullBtn, pullAllBtn, pushBtn, initBtn, libraryBtn)),
   );
 
-  // ---- Panels ------------------------------------------------------------
-  const mappingInfo = h('div', { class: 'mapping' });
-  const sections = [
-    voicePanel(reg),
-    filterPanel(reg),
-    envelopePanel(reg),
-    lfoPanel(reg),
-    matrixPanel(reg),
-    partPanel(reg, mappingInfo),
-  ];
-  const nav = h(
-    'nav',
-    { class: 'section-nav', 'aria-label': 'Sections' },
-    ...sections.map((s) => h('a', { href: `#${s.id}` }, s.querySelector('h2')?.textContent ?? s.id)),
-    h('a', { href: '#librarian' }, 'Librarian'),
+  // ---- Panel ---------------------------------------------------------------
+  const mappingInfo = h('span', { class: 'mapping' });
+  const inLed = h('span', { class: 'status-led' });
+  const outLed = h('span', { class: 'status-led' });
+  const footer = h(
+    'footer',
+    { class: 'panel-footer' },
+    h('span', {}, inLed, 'MIDI in'),
+    h('span', {}, outLed, 'MIDI out'),
+    h('span', { class: 'footer-right' }, h('span', { class: 'badge-plus' }, '+'), ' BAMBI only'),
   );
-  const sidebar = h(
-    'aside',
-    { class: 'sidebar' },
+  const instrument = h(
+    'div',
+    { class: 'instrument' },
+    h('div', { class: 'cheek cheek-left', 'aria-hidden': 'true' }),
+    h('main', { class: 'panel-body' }, header, instrumentPanel(reg, mappingInfo), footer),
+    h('div', { class: 'cheek cheek-right', 'aria-hidden': 'true' }),
+  );
+  const rack = h(
+    'div',
+    { class: 'rack' },
     librarianPanel(engine, {
       selectedPart: () => selected,
       log,
       suggestedName: () => names[selected],
     }),
-    h('section', { class: 'panel' }, h('h2', {}, 'Activity'), logList),
+    h('section', { class: 'rack-panel' }, h('h2', {}, 'Activity'), logList),
   );
-  root.append(header, notices, h('div', { class: 'layout' }, h('main', { class: 'editor' }, nav, ...sections), sidebar));
+  root.append(strip, notices, instrument, rack);
 
   // ---- Behaviour ---------------------------------------------------------
+  /** Flashes a status LED for a moment (MIDI in/out activity). */
+  const blink = (el: HTMLElement) => {
+    el.classList.add('on');
+    clearTimeout(Number(el.dataset.timer));
+    el.dataset.timer = String(setTimeout(() => el.classList.remove('on'), 120));
+  };
+
+  let lastEdit = '';
+  const renderVfd = () => {
+    const loc = locations[selected];
+    const name =
+      names[selected] ||
+      (!engine.parts[selected].synced ? 'not pulled yet' : engine.firmware === 'stock' ? 'names need BAMBI' : '');
+    vfdTop.replaceChildren(
+      ...[h('span', { class: 'vfd-dim' }, `P${selected + 1}`), loc ? h('span', {}, loc) : null, h('span', {}, name.toUpperCase())].filter((x) => x !== null),
+    );
+    const m = engine.mappings[selected];
+    const fw = engine.firmware === 'yamplus' ? `BAMBI ${versionString(engine.client.firmware?.yamPlusVersion ?? 0)}` : engine.firmware === 'stock' ? 'YAM' : '';
+    vfdBottom.replaceChildren(
+      ...[h('span', {}, lastEdit || 'READY'), h('span', {}, m.channel === 0 ? 'OMNI' : `CH ${m.channel}`), fw ? h('span', {}, fw) : null].filter((x) => x !== null),
+    );
+  };
+
   const renderMapping = () => {
-    clear(mappingInfo);
     const m: PartMapping = engine.mappings[selected];
     const known = engine.mappingsKnown;
     const voices = [...Array(6).keys()].filter((v) => m.voices & (1 << v)).map((v) => v + 1);
-    mappingInfo.append(
-      h(
-        'dl',
-        {},
-        h('dt', {}, 'MIDI channel'),
-        h('dd', {}, m.channel === 0 ? 'omni (NRPN on 1)' : String(m.channel), known ? '' : ' (assumed — pull all to read it)'),
-        h('dt', {}, 'Key range'),
-        h('dd', {}, known ? `${noteName(m.keyLow)} – ${noteName(m.keyHigh)}` : '—'),
-        h('dt', {}, 'Voicecards'),
-        h('dd', {}, known ? voices.join(', ') || 'none' : '—'),
-      ),
-      h('p', { class: 'hint' }, 'Channel, key range and voice allocation are multi settings; edit them on the Ambika.'),
-    );
+    const ch = m.channel === 0 ? 'omni' : `ch ${m.channel}`;
+    mappingInfo.textContent = known
+      ? `${ch} · ${noteName(m.keyLow)} to ${noteName(m.keyHigh)} · voices ${voices.join(', ') || 'none'}`
+      : `${ch} (assumed: pull all to read it)`;
+    mappingInfo.title = 'Channel, key range and voice allocation are multi settings; edit them on the Ambika.';
+    renderVfd();
   };
 
   const renderNotices = () => {
@@ -210,9 +241,10 @@ export function startApp(root: HTMLElement): void {
   const renderPartTitle = () => {
     partButtons.forEach((b, i) => {
       b.setAttribute('aria-selected', String(i === selected));
+      b.tabIndex = i === selected ? 0 : -1;
       b.classList.toggle('synced', engine.parts[i].synced);
     });
-    partTitle.textContent = names[selected] ? `“${names[selected]}”` : engine.parts[selected].synced ? '' : '(not pulled yet)';
+    renderVfd();
   };
 
   const selectPart = (i: number) => {
@@ -230,6 +262,7 @@ export function startApp(root: HTMLElement): void {
       for (let part = 1; part <= NUM_PARTS; part++) {
         const reply = await engine.client.requestName(part, StorageObject.Program);
         names[part - 1] = reply.status === 0 ? reply.name : '';
+        locations[part - 1] = reply.status === 0 ? formatLocation(reply.location) : '';
         if (reply.status === 0) log('info', `Part ${part}: ${formatLocation(reply.location)} “${reply.name}”`);
       }
     } catch (e) {
@@ -313,7 +346,10 @@ export function startApp(root: HTMLElement): void {
   });
   midi.on('ports', fillPorts);
   midi.on('status', renderNotices);
-  midi.on('message', ({ data }) => engine.handleMidi(data));
+  midi.on('message', ({ data }) => {
+    blink(inLed);
+    engine.handleMidi(data);
+  });
 
   pullBtn.addEventListener('click', () =>
     guard('Pull part', async () => {
@@ -336,6 +372,7 @@ export function startApp(root: HTMLElement): void {
     if (!confirm(`Replace part ${selected + 1}'s patch with the init patch? (The synth's stored program is not touched until you save it there.)`)) return;
     engine.loadPart(selected, initPatch());
     names[selected] = '';
+    locations[selected] = '';
     renderPartTitle();
   });
 
@@ -343,6 +380,11 @@ export function startApp(root: HTMLElement): void {
     if (part !== selected) return;
     reg.update(address);
     if (origin === 'hardware') reg.flash(address);
+    const def = paramAt(address);
+    if (def) {
+      lastEdit = `${def.name.toUpperCase()} ${formatValue(def, engine.value(part, def))}`;
+      renderVfd();
+    }
   });
   engine.on('part', ({ part }) => {
     if (part === selected) reg.refreshAll();
