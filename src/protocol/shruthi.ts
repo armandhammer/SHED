@@ -181,3 +181,53 @@ export function acceptsPatch(wire: ArrayLike<number>, firmware: 'stock' | 'shooz
 export function isEditableOffset(address: number): boolean {
   return address >= 0 && address <= SHRUTHI_OFFSET.envCurve2;
 }
+
+// ---------------------------------------------------------------------------
+// The whole parameter address space (patch RAM 0–99, sequencer settings
+// 100–141, system settings 142–156, SHOOZ curves 157–158) against a wire
+// patch. A patch carries more than the patch RAM: bytes 76–83 hold
+// legato/portamento (system settings) and the sequencer settings, and on
+// SHOOZ the curves live in byte 77.
+
+const SEQ = SHRUTHI_OFFSET.sequencer;
+const SYS_PORTAMENTO = SHRUTHI_OFFSET.system + 2;
+const SYS_LEGATO = SHRUTHI_OFFSET.system + 3;
+
+/** The address-space bytes a patch dump carries, as `Patch::PrepareForWrite` packs them. */
+export function wirePatchFromSpace(mem: ArrayLike<number>, firmware: 'stock' | 'shooz'): Uint8Array {
+  const extra = new Uint8Array(8);
+  extra[0] = (mem[SYS_LEGATO] ? 0x40 : 0) | (mem[SYS_PORTAMENTO] & 0x3f);
+  extra[1] = mem[SEQ] & 0x03;
+  for (let i = 0; i < 3; i++) extra[2 + i] = mem[SEQ + 1 + i];
+  extra[5] = ((mem[SEQ + 4] << 4) | (mem[SEQ + 5] & 0x0f)) & 0xff;
+  extra[6] = mem[SEQ + 6];
+  extra[7] = mem[SEQ + 7];
+  const curves: [number, number] =
+    firmware === 'shooz' ? [mem[SHRUTHI_OFFSET.envCurve1], mem[SHRUTHI_OFFSET.envCurve2]] : [0, 0];
+  return packPatch(mem, { extra, curves });
+}
+
+/**
+ * Applies an accepted wire patch to the address space (`Storage::AcceptData`
+ * + `Part::UpdatePatch`): the patch RAM, the curves (0 unless SHOOZ and
+ * '&'), and for '%'/'&' patches the legato/portamento and sequencer settings.
+ */
+export function applyWirePatch(mem: Uint8Array, wire: ArrayLike<number>, firmware: 'stock' | 'shooz'): void {
+  const bytes = Uint8Array.from(wire);
+  mem.set(unpackPatch(bytes), 0);
+  const [c1, c2] = firmware === 'shooz' ? patchCurves(bytes) : [0, 0];
+  mem[SHRUTHI_OFFSET.envCurve1] = c1;
+  mem[SHRUTHI_OFFSET.envCurve2] = c2;
+  const marker = bytes[PATCH_MARKER_BYTE];
+  if (marker === PATCH_MARKER.yam || marker === PATCH_MARKER.shooz) {
+    const extra = bytes.subarray(76, 84);
+    mem[SYS_LEGATO] = extra[0] & 0x40 ? 1 : 0;
+    mem[SYS_PORTAMENTO] = extra[0] & 0x3f;
+    mem[SEQ] = extra[1] & 0x03;
+    mem.set(extra.subarray(2, 5), SEQ + 1);
+    mem[SEQ + 4] = extra[5] >> 4;
+    mem[SEQ + 5] = extra[5] & 0x0f;
+    mem[SEQ + 6] = extra[6];
+    mem[SEQ + 7] = extra[7];
+  }
+}

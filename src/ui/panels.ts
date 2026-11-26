@@ -3,16 +3,17 @@
 // graphs and faders, the modulation matrix and modifiers, part and arp.
 
 import { MOD_SOURCES, param } from '../model/params/ambika';
+import type { ParamDef } from '../model/params/types';
 import { fader, knob, leds, ledToggle, menu, type ControlRegistry, type KnobSize } from './controls';
 import { cssVar, fitCanvas, h } from './dom';
 import { cutoffHz, envelopeLayout, envelopeShape, resonanceQ, svfMagnitudeDb, type SvfMode } from './viz-math';
 
 const p = param;
 
-type Accent = 'osc' | 'mix' | 'filter' | 'lfo' | 'env' | 'mod' | 'part';
+export type Accent = 'osc' | 'mix' | 'filter' | 'lfo' | 'env' | 'mod' | 'part';
 
 /** A panel section: heading with a coloured rule, spanning `span` of 12 columns. */
-function section(accent: Accent, title: string, span: number, note: string | HTMLElement | null, ...children: (HTMLElement | null)[]): HTMLElement {
+export function section(accent: Accent, title: string, span: number, note: string | HTMLElement | null, ...children: (HTMLElement | null)[]): HTMLElement {
   return h(
     'section',
     { class: `sec sec-${accent}`, style: `--span: ${span}` },
@@ -21,7 +22,7 @@ function section(accent: Accent, title: string, span: number, note: string | HTM
   );
 }
 
-const row = (cls: string, ...children: (HTMLElement | null)[]) => h('div', { class: cls }, ...children);
+export const row = (cls: string, ...children: (HTMLElement | null)[]) => h('div', { class: cls }, ...children);
 
 const k = (reg: ControlRegistry, id: string, label: string, size: KnobSize = 'md') => knob(reg, p(id), label, size);
 
@@ -198,9 +199,26 @@ function lfos(reg: ControlRegistry): HTMLElement {
 
 /** Envelope graph; drag the attack peak, decay/sustain point and release end. */
 function envelopeGraph(reg: ControlRegistry, n: number): HTMLElement {
-  const ids = ['attack', 'decay', 'sustain', 'release', 'curve'].map((key) => p(`env${n}.${key}`));
-  const [A, D, S, R, C] = ids;
-  const canvas = h('canvas', { class: 'graph graph-env', role: 'img', 'aria-label': `Envelope ${n} shape; drag its points to edit` });
+  const [A, D, S, R, C] = ['attack', 'decay', 'sustain', 'release', 'curve'].map((key) => p(`env${n}.${key}`));
+  return adsrGraph(reg, { A, D, S, R, curve: C, curveValue: () => (reg.engine.supports(C) ? reg.value(C) : 0) }, `Envelope ${n}`);
+}
+
+export interface AdsrDefs {
+  A: ParamDef;
+  D: ParamDef;
+  S: ParamDef;
+  R: ParamDef;
+  /** Parameter the curve comes from (redraws on change), if any. */
+  curve?: ParamDef;
+  /** Curve on BAMBI's 0–127 scale (0 = exponential, 64 = linear). */
+  curveValue: () => number;
+}
+
+/** ADSR graph for any device whose times and levels run 0–127. */
+export function adsrGraph(reg: ControlRegistry, defs: AdsrDefs, name: string): HTMLElement {
+  const { A, D, S, R } = defs;
+  const ids = [A, D, S, R, ...(defs.curve ? [defs.curve] : [])];
+  const canvas = h('canvas', { class: 'graph graph-env', role: 'img', 'aria-label': `${name} shape; drag its points to edit` });
   let dragging: number | null = null;
 
   const layout = () => {
@@ -226,7 +244,7 @@ function envelopeGraph(reg: ControlRegistry, n: number): HTMLElement {
     ctx.stroke();
 
     const pts = layout().points;
-    const curve = reg.engine.supports(C) ? reg.value(C) : 0;
+    const curve = defs.curveValue();
     const seg = (a: { x: number; y: number }, b: { x: number; y: number }, shaped: boolean) => {
       const steps = 32;
       for (let i = 1; i <= steps; i++) {

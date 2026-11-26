@@ -46,12 +46,11 @@ import {
 } from '../model/params/shruthi';
 import {
   SHRUTHI_CMD,
-  PATCH_MARKER,
   acceptsPatch,
-  packPatch,
-  patchCurves,
+  applyWirePatch,
   shruthiSlotCount,
   unpackPatch,
+  wirePatchFromSpace,
 } from '../protocol/shruthi';
 
 /** `SystemSettings::midi_out_mode` (UNIT_MIDI_MODE). */
@@ -60,8 +59,6 @@ export const SHRUTHI_OUT_MODE = { off: 0, thru: 1, seq: 2, ctrl: 3, full: 4, cha
 const SYS = SHRUTHI_OFFSET.system;
 const SYS_MIDI_CHANNEL = SYS + 5;
 const SYS_MIDI_OUT = SYS + 6;
-const SYS_PORTAMENTO = SYS + 2;
-const SYS_LEGATO = SYS + 3;
 const SEQ = SHRUTHI_OFFSET.sequencer;
 const SEQ_STEPS = SEQ + 10;
 
@@ -98,8 +95,6 @@ export class VirtualShruthi {
   readonly firmware: 'stock' | 'shooz';
   /** Parameter address space: patch RAM 0–99, sequencer 100–141, system 142–156, curves 157–158. */
   readonly mem = new Uint8Array(SHRUTHI_ADDRESS_SPACE);
-  /** Patch bytes 76–83 as last loaded (legato/portamento and sequencer copy). */
-  private extra = new Uint8Array(8);
   readonly banks: number;
   /** Stored patches and sequences by slot (wire format). */
   readonly patchSlots = new Map<number, Uint8Array>();
@@ -124,7 +119,6 @@ export class VirtualShruthi {
     this.mem.set(shruthiInitSequencer(), SEQ);
     this.mem.set(shruthiInitSystem(), SYS);
     if (options.outMode !== undefined) this.mem[SYS_MIDI_OUT] = options.outMode;
-    this.extra = shruthiInitPatch().slice(76, 84);
   }
 
   get outMode(): number {
@@ -148,15 +142,7 @@ export class VirtualShruthi {
 
   /** The current patch as `Patch::PrepareForWrite` would send it. */
   wirePatch(): Uint8Array {
-    const extra = new Uint8Array(8);
-    extra[0] = (this.mem[SYS_LEGATO] ? 0x40 : 0) | this.mem[SYS_PORTAMENTO];
-    extra[1] = this.mem[SEQ];
-    extra.set(this.mem.subarray(SEQ + 1, SEQ + 4), 2);
-    extra[5] = ((this.mem[SEQ + 4] << 4) | this.mem[SEQ + 5]) & 0xff;
-    extra[6] = this.mem[SEQ + 6];
-    extra[7] = this.mem[SEQ + 7];
-    const curves = this.firmware === 'shooz' ? this.curves : ([0, 0] as const);
-    return packPatch(this.mem, { extra, curves });
+    return wirePatchFromSpace(this.mem, this.firmware);
   }
 
   // -------------------------------------------------------------------------
@@ -402,23 +388,7 @@ export class VirtualShruthi {
       this.mem.fill(0x2d, SHRUTHI_NAME_OFFSET, SHRUTHI_NAME_OFFSET + SHRUTHI_NAME_LENGTH); // '-'
       return false;
     }
-    const bytes = Uint8Array.from(wire);
-    this.mem.set(unpackPatch(bytes), 0);
-    this.extra = bytes.slice(76, 84);
-    const [c1, c2] = this.firmware === 'shooz' ? patchCurves(bytes) : [0, 0];
-    this.mem[SHRUTHI_OFFSET.envCurve1] = c1;
-    this.mem[SHRUTHI_OFFSET.envCurve2] = c2;
-    const marker = bytes[91];
-    if (marker === PATCH_MARKER.yam || marker === PATCH_MARKER.shooz) {
-      this.mem[SYS_LEGATO] = this.extra[0] & 0x40 ? 1 : 0;
-      this.mem[SYS_PORTAMENTO] = this.extra[0] & 0x3f;
-      this.mem[SEQ] = this.extra[1] & 0x03;
-      this.mem.set(this.extra.subarray(2, 5), SEQ + 1);
-      this.mem[SEQ + 4] = this.extra[5] >> 4;
-      this.mem[SEQ + 5] = this.extra[5] & 0x0f;
-      this.mem[SEQ + 6] = this.extra[6];
-      this.mem[SEQ + 7] = this.extra[7];
-    }
+    applyWirePatch(this.mem, wire, this.firmware);
     this.sanitize();
     return true;
   }

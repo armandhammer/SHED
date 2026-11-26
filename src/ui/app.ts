@@ -10,6 +10,7 @@ import { createVirtualMidi, virtualSetupFromQuery } from '../sim/virtual-midi';
 import { SyncEngine } from '../sync/engine';
 import { ControlRegistry } from './controls';
 import { clear, h } from './dom';
+import { deviceSwitch } from './device';
 import { librarianPanel } from './librarian';
 import { instrumentPanel } from './panels';
 
@@ -53,6 +54,7 @@ export function startApp(root: HTMLElement): void {
   const strip = h(
     'div',
     { class: 'conn-strip' },
+    deviceSwitch('ambika'),
     connectBtn,
     h('label', {}, 'In ', inSel),
     h('label', {}, 'Out ', outSel),
@@ -110,10 +112,18 @@ export function startApp(root: HTMLElement): void {
   const rack = h(
     'div',
     { class: 'rack' },
-    librarianPanel(engine, {
-      selectedPart: () => selected,
+    librarianPanel({
+      device: 'ambika',
       log,
       suggestedName: () => names[selected],
+      defaultName: () => `Part ${selected + 1} ${new Date().toLocaleString()}`,
+      programs: true,
+      snapshot: () => engine.parts[selected],
+      load: (entry) => {
+        engine.loadPart(selected, entry.patch, entry.kind === 'program' ? entry.part : undefined);
+        return true;
+      },
+      loadTitle: () => `Load into part ${selected + 1} and send to the synth`,
     }),
     h('section', { class: 'rack-panel' }, h('h2', {}, 'Activity'), logList),
   );

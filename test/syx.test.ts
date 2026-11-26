@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEVICE_AMBIKA, DEVICE_SHRUTHI, decodeSysEx, encodeSysEx, splitSysEx } from '../src/midi/framer';
 import { initPart, initPatch } from '../src/model/params/ambika';
 import { CMD } from '../src/protocol/ambika';
+import { shruthiInitPatch } from '../src/model/params/shruthi';
 import { exportEntries, exportEntry, fileName, importSyx, type LibraryEntry } from '../src/librarian/syx';
 
 const concat = (...parts: Uint8Array[]) => Uint8Array.from(parts.flatMap((p) => [...p]));
@@ -64,9 +65,42 @@ describe('.syx librarian format', () => {
     // Framing problems are reported per message as they are read; content
     // problems (like a sequence dump) after the whole file has been grouped.
     expect(skipped[0]).toMatch(/message 1: .*checksum/);
-    expect(skipped[1]).toMatch(/message 2: .*device 2/);
+    expect(skipped[1]).toMatch(/message 2: Shruthi patch .*refuse/);
     expect(skipped[2]).toMatch(/message 4: not Mutable/);
     expect(skipped[3]).toMatch(/^sequence dump/);
+  });
+
+  it('round-trips Shruthi patches, named after the name they carry', () => {
+    const a = shruthiInitPatch();
+    a.set([...'Fat Bass'].map((c) => c.charCodeAt(0)), 68);
+    const b = shruthiInitPatch();
+    b.fill(0, 68, 76); // no printable name: falls back to the file name
+    const bytes = exportEntries([
+      { name: 'x', kind: 'patch', device: 'shruthi', patch: a, created: 0 },
+      { name: 'y', kind: 'patch', device: 'shruthi', patch: b, created: 0 },
+    ]);
+    expect(splitSysEx(bytes).map((m) => decodeSysEx(m)).map((f) => [f.device, f.command, f.payload.length])).toEqual([
+      [DEVICE_SHRUTHI, 1, 92],
+      [DEVICE_SHRUTHI, 1, 92],
+    ]);
+    const { entries, skipped } = importSyx(bytes, 'shruthi-bank');
+    expect(skipped).toEqual([]);
+    expect(entries.map((e) => [e.name, e.device, e.kind])).toEqual([
+      ['Fat Bass', 'shruthi', 'patch'],
+      ['shruthi-bank', 'shruthi', 'patch'],
+    ]);
+    expect(entries[0].patch).toEqual(a);
+  });
+
+  it('keeps Ambika and Shruthi entries apart in a mixed file', () => {
+    const bytes = concat(
+      encodeSysEx(DEVICE_AMBIKA, CMD.PATCH, 0, initPatch()),
+      encodeSysEx(DEVICE_SHRUTHI, 0x01, 0, shruthiInitPatch()),
+      encodeSysEx(DEVICE_SHRUTHI, 0x02, 0, new Uint8Array(32)),
+    );
+    const { entries, skipped } = importSyx(bytes, 'mix');
+    expect(entries.map((e) => e.device ?? 'ambika')).toEqual(['ambika', 'shruthi']);
+    expect(skipped).toEqual(['message 3: Shruthi command 0x2 (only patches are stored)']);
   });
 
   it('makes safe download names', () => {

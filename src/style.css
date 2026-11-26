@@ -1161,6 +1161,28 @@ input[type='text'] {
   color: var(--err);
 }
 
+/* ---- Shruthi panel ------------------------------------------------------- */
+
+.mod-grid.mod-grid-6 {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+.modifier-grid.modifier-grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.instrument-shruthi .faders {
+  gap: 22px;
+  padding: 0 4px;
+}
+.lfo-row.lfo-row-stack {
+  grid-template-columns: minmax(0, 1fr);
+}
+.board-page[hidden] {
+  display: none;
+}
+.device-switch select {
+  font-weight: 600;
+}
+
 /* ---- Narrow screens -------------------------------------------------------- */
 
 @media (max-width: 960px) {

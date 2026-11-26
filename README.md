@@ -4,8 +4,9 @@ SHED is a Web MIDI editor and librarian for the Mutable Instruments
 **Ambika**. It runs in the browser with nothing to install and no server: open
 the page, connect MIDI, and edit. It works with
 [BAMBI](https://github.com/armandhammer/BAMBI) (YAM+ firmware) and with stock
-YAM. Shruthi-1 support ([SHOOZ](https://github.com/armandhammer/SHOOZ)) is
-planned but only stubbed for now.
+YAM. It also edits the **Shruthi-1**, with
+[SHOOZ](https://github.com/armandhammer/SHOOZ) or stock YAM firmware: pick
+the synth in the **Synth** menu at the top left.
 
 Status: v0.1, not yet tested against hardware. The checklist for the first
 hardware session is [docs/HARDWARE-TEST.md](docs/HARDWARE-TEST.md).
@@ -111,13 +112,47 @@ On connect, SHED sends the BAMBI version request (SysEx `0x1c`).
   version request, so its display briefly shows `#` (SysEx not accepted) when
   SHED connects; that's expected.
 
+## Shruthi-1
+
+Pick **Shruthi-1** in the Synth menu (or open `?device=shruthi`). The panel
+has every patch parameter (oscillators, mixer, filter, both envelopes with
+draggable graphs, LFOs, the 12-row modulation matrix and the two CV
+operators), the sequencer/arpeggiator settings, keyboard settings and the
+system settings that matter for editing.
+
+- **Filter board.** The firmware's *filter board* system setting decides
+  which extra controls the filter section shows (SVF modes and second
+  cutoff, Polivoks overdrive and FM, 4PM modes, and so on). Set it in the
+  System section or on the Shruthi; SHED follows. Boards without their own
+  page (the standard SMR4 board, and boards that run as `lpf`) show the
+  main filter controls only.
+- **SHOOZ vs stock YAM.** SHED sends the version request (SysEx `0x1c`) when
+  it connects. SHOOZ answers with capability bytes; stock YAM answers
+  without them, and SHED then disables the SHOOZ-only parameters (envelope
+  curve presets, vintage, marked **+**) and sends patches in the stock format.
+  No answer at all means no Shruthi on those ports, or the wrong MIDI channel.
+- **Following the knobs.** Set the Shruthi's **midi out** (system page) to
+  `ctrl` or `full`. The factory setting `thru` only echoes SHED's own
+  messages back, which SHED recognises and ignores.
+- **Push / Write.** Push sends the patch to the edit buffer; **Write…**
+  stores the edit buffer in a slot on the Shruthi after a confirmation.
+  System settings change live and are saved from the Shruthi's own system
+  page.
+
+`?virtual=shooz` or `?virtual=shruthi` (stock YAM) connects to a simulated
+Shruthi ([src/sim/virtual-shruthi.ts](src/sim/virtual-shruthi.ts)), with
+MIDI out `ctrl` unless you add `&outp=thru|full|off`.
+
 ## Librarian
 
 The library lives in the browser's IndexedDB storage, on this computer and in
 this browser profile only. Nothing is uploaded. Clearing site data deletes
 it, so export anything you want to keep as `.syx`. Imported `.syx` files may
 hold several dumps; SHED skips messages it can't use (bad checksums, other
-devices, sequencer data) and tells you why.
+devices, sequencer data) and tells you why. One library holds both synths'
+patches: the Ambika editor lists Ambika entries and the Shruthi editor lists
+Shruthi patches (92-byte SysEx `0x01` dumps, named after the name stored in
+the patch).
 
 ## Protocol references
 

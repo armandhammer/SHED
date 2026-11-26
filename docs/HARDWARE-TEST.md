@@ -113,6 +113,36 @@ keep the Activity log at the bottom of the page in view.
 - [ ] Turn the Ambika off and on with SHED connected: requests time out with
       a clear message, then Reconnect works.
 
+## 9. Shruthi-1 (SHOOZ and stock YAM)
+
+Run once with **SHOOZ** and once with **stock YAM**, on each filter board you
+have (SMR4, CS-80, IR3109, Polivoks). Select **Shruthi-1** in the Synth menu.
+
+- [ ] Set the Shruthi's system page **midi out** to `ctrl`. Connect: the
+      badge shows `SHOOZ 0.1` (or `YAM (stock)`) and the display shows the
+      patch name. The log says "Pulled … and the system settings".
+- [ ] Stock YAM only: the curve menus and Vintage are greyed out with a +.
+- [ ] Turn cutoff, resonance and an envelope knob in SHED: the sound changes
+      and the Shruthi's display follows.
+- [ ] Turn the Shruthi's knobs (cutoff, a mod-matrix amount, tempo): SHED's
+      controls follow and flash.
+- [ ] Mod matrix: change row 7's source and destination in SHED, then check
+      row 7 on the Shruthi's mod page. Same for operator 2.
+- [ ] SHOOZ: set Env 2 curve to `7 inv` in SHED: the attack swells. Push,
+      load another patch on the Shruthi, Pull: the curve is still 7.
+- [ ] Filter board: change it in SHED's System section: the board's page
+      appears under Filter (SVF: 2nd cutoff and modes; Polivoks: overdrive
+      and FM). Note which setting each physical board (CS-80, IR3109) uses.
+- [ ] MIDI out `thru` (factory setting): edits still reach the synth, the log
+      says SHED ignores the echoes, nothing jumps back.
+- [ ] Write… slot 16: confirm, then load patch 16 on the Shruthi: it's the
+      edited sound.
+- [ ] Librarian: Save patch, Init, Load the saved entry: the sound returns.
+      Export it as .syx, send that file with another tool (or import it on
+      another browser): same sound.
+- [ ] Switch the Synth menu back to Ambika: the Ambika editor and its
+      library entries come back.
+
 ## Firmware notes found while auditing
 
 These are in the firmware (stock YAM and BAMBI), not in SHED:
