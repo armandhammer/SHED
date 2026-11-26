@@ -49,6 +49,18 @@ Edge. Other scripts:
 Pushes to `main` are tested, built and deployed to GitHub Pages by
 [.github/workflows/ci.yml](.github/workflows/ci.yml).
 
+### Without an Ambika
+
+Add `?virtual=bambi` or `?virtual=stock` to the URL (for example
+http://localhost:5173/?virtual=bambi) to connect to a simulated Ambika instead
+of real MIDI ports. Add `&outp=full` to simulate the `full` output mode. The
+simulator ([src/sim/virtual-ambika.ts](src/sim/virtual-ambika.ts)) models the
+controller's MIDI behaviour as read from the firmware: SysEx requests and
+replies, NRPN reception per part, front-panel edits sent with the firmware's
+running address, echoes in `full` mode and the input filter. It makes no
+sound. The end-to-end tests in [test/sim.test.ts](test/sim.test.ts) run SHED
+against it.
+
 ## Browser support
 
 SHED needs Web MIDI with SysEx, so it runs in **Chrome or Edge** on desktop.

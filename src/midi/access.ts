@@ -56,7 +56,7 @@ function info(port: MIDIPort): PortInfo {
 const PREFERRED = /ambika|shruthi|mutable/i;
 
 export class MidiAccess extends Emitter<MidiEvents> {
-  status: MidiStatus = typeof navigator !== 'undefined' && 'requestMIDIAccess' in navigator ? 'idle' : 'unsupported';
+  status: MidiStatus;
   error: string | null = null;
   private access: MIDIAccess | null = null;
   private input: MIDIInput | null = null;
@@ -64,6 +64,16 @@ export class MidiAccess extends Emitter<MidiEvents> {
   private readonly onMidiMessage = (e: MIDIMessageEvent) => {
     if (e.data) this.emit('message', { data: e.data, timeStamp: e.timeStamp });
   };
+
+  /**
+   * @param provider replaces `navigator.requestMIDIAccess` (the simulated
+   *   Ambika uses this); with a provider, Web MIDI support isn't required.
+   */
+  constructor(private readonly provider?: () => Promise<MIDIAccess>) {
+    super();
+    const native = typeof navigator !== 'undefined' && 'requestMIDIAccess' in navigator;
+    this.status = provider || native ? 'idle' : 'unsupported';
+  }
 
   get supported(): boolean {
     return this.status !== 'unsupported';
@@ -73,7 +83,7 @@ export class MidiAccess extends Emitter<MidiEvents> {
     if (!this.supported) return false;
     this.setStatus('requesting');
     try {
-      this.access = await navigator.requestMIDIAccess({ sysex: true });
+      this.access = await (this.provider ? this.provider() : navigator.requestMIDIAccess({ sysex: true }));
     } catch (e) {
       this.error = e instanceof Error ? e.message : String(e);
       this.setStatus('denied');

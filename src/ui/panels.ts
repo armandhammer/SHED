@@ -15,6 +15,13 @@ function section(id: string, title: string, ...children: HTMLElement[]): HTMLEle
   return h('section', { class: 'panel', id }, h('h2', {}, title), h('div', { class: 'cards' }, ...children));
 }
 
+/** Adds a tooltip to a control's name (the control itself shows its NRPN/CC). */
+function withTitle(el: HTMLElement, title: string): HTMLElement {
+  const name = el.querySelector<HTMLElement>('.ctl-name');
+  (name ?? el).title = title;
+  return el;
+}
+
 // ---------------------------------------------------------------------------
 
 export function voicePanel(reg: ControlRegistry): HTMLElement {
@@ -254,7 +261,7 @@ export function envelopePanel(reg: ControlRegistry): HTMLElement {
       slider(reg, p(`env${n}.decay`), 'Decay'),
       slider(reg, p(`env${n}.sustain`), 'Sustain'),
       slider(reg, p(`env${n}.release`), 'Release'),
-      slider(reg, p(`env${n}.curve`), 'Curve (exp · lin · inv)'),
+      withTitle(slider(reg, p(`env${n}.curve`), 'Curve'), '0 = exponential (YAM), 64 = linear, 127 = inverse exponential'),
     );
   return section('envelopes', 'Envelopes', env(1), env(2), env(3));
 }

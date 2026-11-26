@@ -5,6 +5,7 @@ import { MidiAccess } from '../midi/access';
 import { initPatch, NUM_PARTS, txChannel, type PartMapping } from '../model/params/ambika';
 import { formatLocation, StorageObject, versionString } from '../protocol/ambika';
 import { RequestTimeout } from '../protocol/client';
+import { createVirtualMidi, virtualSetupFromQuery } from '../sim/virtual-midi';
 import { SyncEngine } from '../sync/engine';
 import { ControlRegistry } from './controls';
 import { clear, h } from './dom';
@@ -15,7 +16,11 @@ const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 
 const noteName = (n: number) => `${NOTE_NAMES[n % 12]}${Math.floor(n / 12) - 1}`;
 
 export function startApp(root: HTMLElement): void {
-  const midi = new MidiAccess();
+  // `?virtual=bambi|stock`: a simulated Ambika instead of real MIDI ports.
+  const virtualSetup = virtualSetupFromQuery(location.search);
+  const virtual = virtualSetup ? createVirtualMidi(virtualSetup) : null;
+  const midi = new MidiAccess(virtual ? async () => virtual.access : undefined);
+  if (virtual) (window as unknown as { virtualAmbika: unknown }).virtualAmbika = virtual.synth;
   let selected = 0;
   const names: string[] = new Array(NUM_PARTS).fill('');
   const engine = new SyncEngine({ send: (b) => midi.send(b) });
@@ -125,6 +130,26 @@ export function startApp(root: HTMLElement): void {
     if (!midi.supported) {
       add('error', 'This browser has no Web MIDI. Use Chrome or Edge on desktop (Safari has none, Firefox needs a site-permission add-on).');
       return;
+    }
+    if (virtual) {
+      const synth = virtual.synth;
+      const knob = h(
+        'button',
+        {
+          type: 'button',
+          onclick: () => {
+            const cutoffAddress = 16;
+            const current = synth.byte(selected, cutoffAddress);
+            synth.turnKnob(selected, cutoffAddress, (current + 17) % 128);
+          },
+        },
+        'Turn its cutoff knob',
+      );
+      add(
+        'info',
+        `Simulated Ambika (${synth.firmware === 'yamplus' ? 'BAMBI' : 'stock YAM'}, outp mode ${synth.outMode}): no hardware involved. `,
+        knob,
+      );
     }
     if (midi.status === 'denied') {
       add('error', 'MIDI access was blocked. Allow MIDI and SysEx for this site in the browser’s site settings, then reload.');
