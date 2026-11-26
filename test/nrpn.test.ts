@@ -85,4 +85,22 @@ describe('NRPN decoder', () => {
     expect(dec.controlChange(0, 97, 0)).toEqual({ kind: 'step', channel: 0, address: 9, delta: -1 });
     expect(dec.message([0x90, 60, 100])).toBeNull();
   });
+
+  it('shares one address latch across channels when decoding the Ambika (OnEdit keeps one running address)', () => {
+    // Part 1 (channel 1) edits address 16, then part 2 (channel 2) edits the
+    // same address: the Ambika sends the second value without CC99/98.
+    const stream = [
+      [0xb0, 99, 0], [0xb0, 98, 16], [0xb0, 6, 0], [0xb0, 38, 40],
+      [0xb1, 6, 0], [0xb1, 38, 70],
+    ];
+    const shared = new NrpnDecoder({ sharedAddress: true });
+    const perChannel = new NrpnDecoder();
+    const run = (d: NrpnDecoder) => stream.map((m) => d.message(m)).filter((e) => e !== null);
+    expect(run(shared)).toEqual([
+      { kind: 'set', channel: 0, address: 16, value: 40 },
+      { kind: 'set', channel: 1, address: 16, value: 70 },
+    ]);
+    // A per-channel latch loses the second edit.
+    expect(run(perChannel)).toEqual([{ kind: 'set', channel: 0, address: 16, value: 40 }]);
+  });
 });

@@ -138,12 +138,16 @@ export function startApp(root: HTMLElement): void {
         'Turn a knob on the Ambika: if SHED doesn’t follow, set ',
         h('strong', {}, 'System → outp mode'),
         ' to ',
-        h('code', {}, 'ctrl'),
-        ' or ',
+        h('code', {}, 'controllr'),
+        ' (or ',
         h('code', {}, 'full'),
-        ' (and ',
+        '). ',
         h('strong', {}, 'inpt filter'),
-        ' must let NRPN in).',
+        ' must not show ',
+        h('code', {}, 'n'),
+        ' or ',
+        h('code', {}, 's'),
+        ', or the Ambika ignores SHED’s edits and requests.',
       );
     }
     const siblings = engine.channelSiblings(selected);
@@ -213,7 +217,7 @@ export function startApp(root: HTMLElement): void {
     try {
       await fn();
     } catch (e) {
-      const msg = e instanceof RequestTimeout ? `${(e as Error).message} — check the cable, ports and that SysEx reaches the Ambika` : (e as Error).message;
+      const msg = e instanceof RequestTimeout ? `${(e as Error).message}: check the cable and ports, and that System → inpt filter on the Ambika doesn’t block SysEx (no “s”)` : (e as Error).message;
       log('error', `${what}: ${msg}`);
     }
   };

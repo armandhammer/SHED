@@ -86,6 +86,17 @@ interface ChannelState {
   dataMsb: number;
 }
 
+export interface NrpnDecoderOptions {
+  /**
+   * One address latch for all channels instead of one per channel. The
+   * Ambika's sender (`MidiDispatcher::OnEdit`) keeps a single running address
+   * for every channel: after an edit of address A on part 1, an edit of A on
+   * part 2 goes out on part 2's channel *without* CC99/98. Decoding the
+   * Ambika's output therefore needs a shared latch.
+   */
+  sharedAddress?: boolean;
+}
+
 /**
  * Decoder that mirrors `Part::ControlChange` in the firmware, so it accepts
  * exactly what the Ambika sends out (`MidiDispatcher::OnEdit`), including
@@ -93,12 +104,18 @@ interface ChannelState {
  */
 export class NrpnDecoder {
   private readonly channels = new Map<number, ChannelState>();
+  private readonly shared: boolean;
+
+  constructor(options: NrpnDecoderOptions = {}) {
+    this.shared = options.sharedAddress ?? false;
+  }
 
   private state(channel: number): ChannelState {
-    let s = this.channels.get(channel);
+    const key = this.shared ? 0 : channel;
+    let s = this.channels.get(key);
     if (!s) {
       s = { addressMsb: 0, address: null, dataMsb: 0 };
-      this.channels.set(channel, s);
+      this.channels.set(key, s);
     }
     return s;
   }

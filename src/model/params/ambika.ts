@@ -306,6 +306,9 @@ export const INIT_PART: readonly number[] = (() => {
     p[48 + step * 2] = note | (step % 2 === 0 ? 0x80 : 0);
     p[49 + step * 2] = 100;
   }
+  // Step 12 also has its gate and legato flags set in the firmware's init part.
+  p[48 + 11 * 2] |= 0x80;
+  p[49 + 11 * 2] |= 0x80;
   p[80] = 1; // spread mode: center for new parts (YAM+)
   return p;
 })();

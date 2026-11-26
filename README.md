@@ -66,10 +66,15 @@ works on `https://` pages and on `localhost`.
 1. Connect the Ambika's MIDI in and out to your interface, then pick that
    input and output in SHED. SHED remembers the ports by name.
 2. For front-panel edits to show up in SHED, set **System → outp mode** to
-   `ctrl` or `full`. In the other modes (`thru`, for example) the Ambika
-   doesn't send its knob moves.
-3. Check that **System → inpt filter** lets NRPN through, otherwise the
-   Ambika ignores SHED's parameter edits.
+   `controllr` (recommended) or `full`. In `thru` and `sequencer` modes the
+   Ambika doesn't send its knob moves. In `full` (and `chain`) mode it also
+   forwards everything SHED sends; SHED recognises those echoes and ignores
+   them.
+3. Check **System → inpt filter**. It shows four characters, `cnps`, and each
+   letter that appears is a message type the Ambika *ignores*: `c` control
+   change, `n` NRPN, `p` program change, `s` SysEx. SHED needs NRPN and SysEx,
+   so neither `n` nor `s` may show; `....` lets everything in. With `s`
+   showing, every request times out and SHED takes the synth for stock YAM.
 4. If two parts share a MIDI channel, an edit sent on that channel changes
    all of them. SHED mirrors such edits to every part on the channel and warns
    you.
@@ -85,7 +90,9 @@ On connect, SHED sends the BAMBI version request (SysEx `0x1c`).
   the right part.
 - **No reply within 700 ms** means stock YAM (or another Ambika firmware). The
   `+` parameters are disabled, and SHED sends one request at a time so it
-  always knows which part a reply belongs to.
+  always knows which part a reply belongs to. Stock YAM doesn't know the
+  version request, so its display briefly shows `#` (SysEx not accepted) when
+  SHED connects; that's expected.
 
 ## Librarian
 

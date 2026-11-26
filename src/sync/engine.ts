@@ -6,9 +6,13 @@
 //   - a full patch goes out as one SysEx 0x01 (bulk lane), part settings as
 //     paced NRPNs (bulk lane).
 // Hardware → browser
-//   - NRPN echoes from the front panel (MIDI out mode ctrl/chain/full) update
+//   - NRPN edits from the front panel (MIDI out mode ctrl/chain/full) update
 //     every part that listens on that channel, except a parameter the browser
-//     is dragging or edited in the last 150 ms (echo suppression);
+//     is dragging or edited in the last 150 ms (echo suppression). The
+//     decoder shares one address latch across channels, like the Ambika's
+//     sender does;
+//   - in full/chain mode the synth also forwards SHED's own messages; those
+//     are recognised and dropped (see echo.ts);
 //   - dumps (pulled or sent from the front panel) replace the model.
 
 import { NrpnDecoder, NrpnEncoder, type NrpnEvent } from '../midi/nrpn';
@@ -33,6 +37,7 @@ import { clamp, fromByte, toByte, type ParamDef } from '../model/params/types';
 import { CMD, patchDump } from '../protocol/ambika';
 import { AmbikaClient, type FirmwareMode, type ProgramDump } from '../protocol/client';
 import { Emitter } from '../util/emitter';
+import { EchoFilter } from './echo';
 
 export const EDIT_INTERVAL_MS = 25; // 40 Hz per parameter
 export const ECHO_SUPPRESS_MS = 150;
@@ -71,7 +76,8 @@ export class SyncEngine extends Emitter<EngineEvents> {
   readonly scheduler: OutboundScheduler;
   readonly client: AmbikaClient;
   private readonly encoder = new NrpnEncoder();
-  private readonly decoder = new NrpnDecoder();
+  private readonly decoder = new NrpnDecoder({ sharedAddress: true });
+  private readonly echo: EchoFilter;
   private readonly lastLocalEdit = new Map<string, number>();
   private readonly dragging = new Set<string>();
   /** Multi dump being received unsolicited (front-panel send). */
@@ -88,8 +94,12 @@ export class SyncEngine extends Emitter<EngineEvents> {
     for (let i = 0; i < NUM_PARTS; i++) this.parts.push({ patch: initPatch(), part: initPart(), synced: false });
     // Until a multi dump says otherwise, assume part n listens on channel n.
     this.mappings = Array.from({ length: NUM_PARTS }, (_, i) => ({ channel: i + 1, keyLow: 0, keyHigh: 127, voices: 0 }));
+    this.echo = new EchoFilter(clock, () =>
+      this.log('info', 'The Ambika forwards what SHED sends (outp mode full or chain); SHED ignores those echoes.'),
+    );
     this.scheduler = new OutboundScheduler((bytes) => {
       this.port.send(bytes);
+      this.echo.record(bytes);
     }, { clock });
     this.client = new AmbikaClient(
       {
@@ -100,6 +110,11 @@ export class SyncEngine extends Emitter<EngineEvents> {
     );
     this.client.on('unsolicited', (f) => this.onUnsolicited(f.command, f.argument, f.payload));
     this.client.on('error', (text) => this.log('warn', text));
+  }
+
+  /** True once the synth was seen echoing SHED's own messages (outp mode full/chain). */
+  get echoing(): boolean {
+    return this.echo.active;
   }
 
   get firmware(): FirmwareMode {
@@ -233,6 +248,7 @@ export class SyncEngine extends Emitter<EngineEvents> {
 
   /** Feed every incoming MIDI message. */
   handleMidi(data: Uint8Array): void {
+    if (this.echo.isEcho(data)) return;
     if (data[0] === 0xf0) {
       this.client.handleSysEx(data);
       return;
@@ -350,6 +366,7 @@ export class SyncEngine extends Emitter<EngineEvents> {
   resetLink(): void {
     this.encoder.invalidate();
     this.decoder.reset();
+    this.echo.reset();
     this.scheduler.clear();
     this.client.reset();
     this.hardwareEditsSeen = false;
