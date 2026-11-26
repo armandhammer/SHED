@@ -141,6 +141,15 @@ describe('SHED against the simulated Ambika', () => {
     expect(logs.slice(before).some((l) => /Patch received/.test(l))).toBe(false);
   });
 
+  it('does not take a pulled dump identical to a push for an echo (BAMBI, controllr)', async () => {
+    const { engine, synth, settle } = rig({ firmware: 'yamplus' });
+    await settle(engine.detect());
+    engine.pushPatch(0);
+    await settle(engine.pullPart(0)); // reply: 0x01, part 1, same bytes as the push
+    expect(engine.echoing).toBe(false);
+    expect([...engine.parts[0].patch]).toEqual([...synth.parts[0].patch]);
+  });
+
   it('pushes a patch and part settings that the synth stores', async () => {
     const { clock, engine, synth } = rig({ firmware: 'yamplus' });
     const patch = engine.parts[4].patch.slice();

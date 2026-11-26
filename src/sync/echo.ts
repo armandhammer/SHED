@@ -10,10 +10,13 @@
 //   - an echoed patch push looks like a dump sent from the front panel.
 //
 // The filter remembers what SHED sent for a short while. An exact echo of a
-// SysEx message SHED sent (the version request at connect, at the latest)
-// proves that the synth forwards its input; from then on, incoming messages
-// that match something SHED sent recently are dropped. Forwarding keeps the
-// order, so a match also retires everything SHED sent before it.
+// SysEx *request* SHED sent (the version request at connect, at the latest)
+// proves that the synth forwards its input: the Ambika only ever sends
+// replies and dumps (commands 0x01–0x0f) itself, never requests (0x10–0x1f).
+// A dump can't serve as proof, because BAMBI's reply to "pull part 1" right
+// after "push part 1" is byte for byte the push. From then on, incoming
+// messages that match something SHED sent recently are dropped. Forwarding
+// keeps the order, so a match also retires everything SHED sent before it.
 
 import type { Clock } from '../midi/scheduler';
 
@@ -51,6 +54,11 @@ export function splitMessages(bytes: Uint8Array): Uint8Array[] {
   return out;
 }
 
+/** An MI SysEx request (command 0x10–0x1f): something only SHED sends. */
+function isRequest(msg: Uint8Array): boolean {
+  return msg[0] === 0xf0 && msg.length > 7 && msg[6] >= 0x10 && msg[6] <= 0x1f;
+}
+
 function key(msg: ArrayLike<number>): string {
   let s = '';
   for (let i = 0; i < msg.length; i++) s += (msg[i] < 16 ? '0' : '') + msg[i].toString(16);
@@ -60,7 +68,7 @@ function key(msg: ArrayLike<number>): string {
 export class EchoFilter {
   /** True once the synth has been seen forwarding SHED's messages. */
   active = false;
-  private pending: { key: string; sysex: boolean; t: number }[] = [];
+  private pending: { key: string; request: boolean; t: number }[] = [];
 
   constructor(
     private readonly clock: Clock,
@@ -71,16 +79,15 @@ export class EchoFilter {
   record(bytes: Uint8Array): void {
     const t = this.clock.now();
     this.expire(t);
-    for (const msg of splitMessages(bytes)) this.pending.push({ key: key(msg), sysex: msg[0] === 0xf0, t });
+    for (const msg of splitMessages(bytes)) this.pending.push({ key: key(msg), request: isRequest(msg), t });
   }
 
   /** True if `msg` is an echo of something SHED sent (and should be ignored). */
   isEcho(msg: Uint8Array): boolean {
     this.expire(this.clock.now());
-    const isSysEx = msg[0] === 0xf0;
-    if (!this.active && !isSysEx) return false;
+    if (!this.active && !isRequest(msg)) return false;
     const k = key(msg);
-    const i = this.pending.findIndex((p) => p.key === k && (this.active || p.sysex));
+    const i = this.pending.findIndex((p) => p.key === k && (this.active || p.request));
     if (i < 0) return false;
     this.pending.splice(0, i + 1);
     if (!this.active) {

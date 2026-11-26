@@ -7,7 +7,8 @@ the page, connect MIDI, and edit. It works with
 YAM. Shruthi-1 support ([SHOOZ](https://github.com/armandhammer/SHOOZ)) is
 planned but only stubbed for now.
 
-Status: v0.1, not yet tested against hardware.
+Status: v0.1, not yet tested against hardware. The checklist for the first
+hardware session is [docs/HARDWARE-TEST.md](docs/HARDWARE-TEST.md).
 
 ## What it does
 
