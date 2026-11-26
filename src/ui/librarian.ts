@@ -98,7 +98,7 @@ export function librarianPanel(engine: SyncEngine, hooks: LibrarianHooks): HTMLE
 
   const panel = h(
     'section',
-    { class: 'panel librarian', id: 'librarian' },
+    { class: 'rack-panel librarian', id: 'librarian' },
     h('h2', {}, 'Librarian'),
     h(
       'div',

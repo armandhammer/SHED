@@ -38,8 +38,8 @@ keep the Activity log at the bottom of the page in view.
 - [ ] Drag Filter 1 cutoff while holding a note: the sound follows smoothly,
       no stuck or late steps, and the LCD value matches when you stop.
 - [ ] Drag quickly over several controls at once (cutoff, resonance, env 2
-      amount): no MIDI errors, no stuck notes, the queue counter in the header
-      drains.
+      amount): no MIDI errors, no stuck notes, the queue counter in the
+      connection strip drains.
 - [ ] Osc 1 shape: pick `wavquence`, `oldsaw`, `qpwm`, `fmfb`, `csaw`,
       `vowel 2` (shapes 37–42). Each sounds different. These need voicecard
       firmware that has them.
@@ -55,12 +55,12 @@ keep the Activity log at the bottom of the page in view.
 
 ## 3. Synth → browser
 
-- [ ] Turn the cutoff encoder on the Ambika: SHED's cutoff slider follows and
+- [ ] Turn the cutoff encoder on the Ambika: SHED's cutoff knob follows and
       flashes. The "Turn a knob" hint disappears.
 - [ ] **Running-address case:** set parts 1 and 2 to different MIDI channels
       (default). Edit filter cutoff on part 1 from the front panel, switch the
       front panel to part 2, edit filter cutoff again. In SHED, part 2's
-      cutoff must change (select part 2's tab to see it) and part 1's must
+      cutoff must change (press part key 2 in SHED to see it) and part 1's must
       keep its value. This is the case the per-channel decoder got wrong.
 - [ ] Turn one encoder continuously for a few seconds (more than 32 steps):
       SHED keeps following.
@@ -76,7 +76,7 @@ keep the Activity log at the bottom of the page in view.
 
 - [ ] Set outp mode = `full`, press Reconnect. The log says the Ambika
       forwards what SHED sends and that SHED ignores the echoes.
-- [ ] Repeat the section 3 running-address case and a slider drag in SHED:
+- [ ] Repeat the section 3 running-address case and a knob drag in SHED:
       values still land on the right parameters, and Push patch doesn't log
       "Patch received".
 - [ ] Set outp mode back to `controllr`.

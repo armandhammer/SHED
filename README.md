@@ -12,11 +12,15 @@ hardware session is [docs/HARDWARE-TEST.md](docs/HARDWARE-TEST.md).
 
 ## What it does
 
-- Edits every patch parameter of a part: oscillators (all 43 YAM shapes,
-  including the ones past 37 that other editors cap), mixer, filter with a
-  view of the SVF response, envelopes with draggable ADSR handles, LFOs, the
-  modulation matrix and modifiers, and the part settings (volume, tuning,
-  voice mode, spread, legato, portamento, raga, arpeggiator).
+- Edits every patch parameter of a part on one hardware-style panel:
+  oscillators (all 43 YAM shapes, including the ones past 37 that other
+  editors cap), mixer, both filters with a response graph each, LFOs, three
+  envelopes with a graph (drag its points) and faders, the modulation matrix
+  and modifiers, and the part settings (volume, tuning, voice mode, spread,
+  legato, portamento, raga, arpeggiator).
+- Knobs: drag up or right (Shift for fine steps), scroll, or use the arrow
+  keys; double-click a value to type it. Faders work the same way. Value
+  windows step with ◀ ▶ or open a list when clicked.
 - Follows the synth: knob turns on the Ambika arrive as NRPN and move the
   matching controls. While you drag a control, echoes from the synth are
   ignored so the control doesn't jump back.
