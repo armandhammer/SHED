@@ -31,8 +31,8 @@ export interface ParamDef {
   readonly cc?: number;
   /** Instance index for repeated objects (envelopes, LFOs, mod slots). */
   readonly instance?: number;
-  /** Present only in BAMBI (YAM+); a harmless no-op on stock YAM. */
-  readonly since?: 'yamplus';
+  /** Present only in BAMBI (YAM+) / SHOOZ; a harmless no-op on stock YAM. */
+  readonly since?: 'yamplus' | 'shooz';
   /** Default value used by the init patch. */
   readonly init?: number;
 }

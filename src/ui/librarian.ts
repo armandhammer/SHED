@@ -1,18 +1,28 @@
-// Librarian sidebar: IndexedDB entries, .syx import/export.
+// Librarian sidebar: IndexedDB entries, .syx import/export. One library for
+// every synth; the panel lists the entries of the synth being edited.
 
 import { Library } from '../librarian/db';
-import { exportEntries, exportEntry, fileName, importSyx, type LibraryEntry } from '../librarian/syx';
-import type { SyncEngine } from '../sync/engine';
+import { entryDevice, exportEntries, exportEntry, fileName, importSyx, type Device, type EntryKind, type LibraryEntry } from '../librarian/syx';
 import { clear, download, h } from './dom';
 
 export interface LibrarianHooks {
-  selectedPart(): number;
+  device: Device;
   log(level: 'info' | 'warn' | 'error', text: string): void;
   /** Suggested name for a new entry (e.g. the SD name reported by BAMBI). */
   suggestedName(): string;
+  /** Fallback name, e.g. "Part 2 <date>". */
+  defaultName(): string;
+  /** The sound being edited: patch, plus the part settings for a program. */
+  snapshot(kind: EntryKind): { patch: Uint8Array; part?: Uint8Array };
+  /** True if the device has programs (patch + part settings). */
+  programs: boolean;
+  /** Loads an entry into the editor and the synth; false if refused. */
+  load(entry: LibraryEntry): boolean;
+  /** Tooltip of the Load buttons. */
+  loadTitle(): string;
 }
 
-export function librarianPanel(engine: SyncEngine, hooks: LibrarianHooks): HTMLElement {
+export function librarianPanel(hooks: LibrarianHooks): HTMLElement {
   const lib = new Library();
   const list = h('ul', { class: 'lib-list' });
   const nameInput = h('input', { type: 'text', placeholder: 'Name', maxlength: 32, 'aria-label': 'Entry name' });
@@ -21,14 +31,14 @@ export function librarianPanel(engine: SyncEngine, hooks: LibrarianHooks): HTMLE
 
   const refresh = async () => {
     try {
-      entries = await lib.list();
+      entries = (await lib.list()).filter((e) => entryDevice(e) === hooks.device);
     } catch (e) {
       hooks.log('error', `Librarian storage unavailable: ${(e as Error).message}`);
       entries = [];
     }
     clear(list);
     if (!entries.length) {
-      list.append(h('li', { class: 'muted' }, 'No patches yet. Save the current part or import a .syx file.'));
+      list.append(h('li', { class: 'muted' }, `No ${hooks.device === 'shruthi' ? 'Shruthi' : 'Ambika'} patches yet. Save the current sound or import a .syx file.`));
       return;
     }
     for (const entry of entries) {
@@ -41,7 +51,7 @@ export function librarianPanel(engine: SyncEngine, hooks: LibrarianHooks): HTMLE
           h(
             'span',
             { class: 'lib-actions' },
-            h('button', { type: 'button', title: `Load into part ${hooks.selectedPart() + 1} and send to the synth`, onclick: () => load(entry) }, 'Load'),
+            h('button', { type: 'button', title: hooks.loadTitle(), onclick: () => load(entry) }, 'Load'),
             h('button', { type: 'button', title: 'Download as .syx', onclick: () => download(exportEntry(entry), fileName(entry.name)) }, '.syx'),
             h('button', { type: 'button', class: 'danger', title: 'Delete from this browser', onclick: () => remove(entry) }, '✕'),
           ),
@@ -51,9 +61,8 @@ export function librarianPanel(engine: SyncEngine, hooks: LibrarianHooks): HTMLE
   };
 
   const load = (entry: LibraryEntry) => {
-    const part = hooks.selectedPart();
-    engine.loadPart(part, entry.patch, entry.kind === 'program' ? entry.part : undefined);
-    hooks.log('info', `Loaded “${entry.name}” into part ${part + 1}`);
+    if (hooks.load(entry)) hooks.log('info', `Loaded “${entry.name}”`);
+    else hooks.log('warn', `“${entry.name}” can't be loaded into this synth`);
   };
 
   const remove = async (entry: LibraryEntry) => {
@@ -62,15 +71,15 @@ export function librarianPanel(engine: SyncEngine, hooks: LibrarianHooks): HTMLE
     await refresh();
   };
 
-  const save = async (kind: 'patch' | 'program') => {
-    const part = hooks.selectedPart();
-    const m = engine.parts[part];
-    const name = nameInput.value.trim() || hooks.suggestedName() || `Part ${part + 1} ${new Date().toLocaleString()}`;
+  const save = async (kind: EntryKind) => {
+    const name = nameInput.value.trim() || hooks.suggestedName() || hooks.defaultName();
+    const { patch, part } = hooks.snapshot(kind);
     await lib.put({
       name,
       kind,
-      patch: m.patch.slice(),
-      part: kind === 'program' ? m.part.slice() : undefined,
+      device: hooks.device,
+      patch: patch.slice(),
+      part: kind === 'program' ? part?.slice() : undefined,
       created: Date.now(),
     });
     nameInput.value = '';
@@ -83,9 +92,10 @@ export function librarianPanel(engine: SyncEngine, hooks: LibrarianHooks): HTMLE
       const bytes = new Uint8Array(await file.arrayBuffer());
       const result = importSyx(bytes, file.name.replace(/\.syx$/i, ''));
       if (result.entries.length) await lib.putMany(result.entries);
+      const other = result.entries.filter((e) => entryDevice(e) !== hooks.device).length;
       hooks.log(
         result.entries.length ? 'info' : 'warn',
-        `${file.name}: ${result.entries.length} imported${result.skipped.length ? `, ${result.skipped.length} skipped (${result.skipped[0]}${result.skipped.length > 1 ? ', …' : ''})` : ''}`,
+        `${file.name}: ${result.entries.length} imported${other ? ` (${other} for the ${hooks.device === 'shruthi' ? 'Ambika' : 'Shruthi'}, listed in its editor)` : ''}${result.skipped.length ? `, ${result.skipped.length} skipped (${result.skipped[0]}${result.skipped.length > 1 ? ', …' : ''})` : ''}`,
       );
     }
     await refresh();
@@ -104,8 +114,8 @@ export function librarianPanel(engine: SyncEngine, hooks: LibrarianHooks): HTMLE
       'div',
       { class: 'lib-save' },
       nameInput,
-      h('button', { type: 'button', onclick: () => void save('patch'), title: 'Store the patch (sound) of the selected part' }, 'Save patch'),
-      h('button', { type: 'button', onclick: () => void save('program'), title: 'Store patch + part settings' }, 'Save program'),
+      h('button', { type: 'button', onclick: () => void save('patch'), title: 'Store the patch (sound) being edited' }, 'Save patch'),
+      hooks.programs ? h('button', { type: 'button', onclick: () => void save('program'), title: 'Store patch + part settings' }, 'Save program') : null,
     ),
     h(
       'div',
@@ -115,7 +125,7 @@ export function librarianPanel(engine: SyncEngine, hooks: LibrarianHooks): HTMLE
         'button',
         {
           type: 'button',
-          onclick: () => entries.length && download(exportEntries(entries), 'shed-library.syx'),
+          onclick: () => entries.length && download(exportEntries(entries), `shed-${hooks.device}-library.syx`),
         },
         'Export all',
       ),

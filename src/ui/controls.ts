@@ -3,11 +3,25 @@
 
 import { OSC_SHAPE_GROUPS, OSC_SHAPES } from '../model/params/ambika';
 import { formatValue, type ParamDef } from '../model/params/types';
-import type { SyncEngine } from '../sync/engine';
 import { faderValue, knobAngle, knobDragValue, sliderKey, stepEnum, fraction } from './control-math';
 import { h } from './dom';
 
 type Refresh = () => void;
+
+/**
+ * What the controls need from a device engine (the Ambika's SyncEngine, or
+ * the Shruthi adapter). `part` is the Ambika part; single-part synths ignore it.
+ */
+export interface ControlEngine {
+  value(part: number, def: ParamDef): number;
+  set(part: number, def: ParamDef, value: number): void;
+  /** False when the connected firmware lacks the parameter. */
+  supports(def: ParamDef): boolean;
+  beginDrag(part: number, address: number): void;
+  endDrag(part: number, address: number): void;
+  /** Highest selectable Ambika oscillator shape. */
+  readonly oscShapeMax: number;
+}
 
 /** Keeps every on-screen control in step with the selected part's model. */
 export class ControlRegistry {
@@ -16,8 +30,8 @@ export class ControlRegistry {
   private readonly flashers = new Map<number, Set<HTMLElement>>();
 
   constructor(
-    readonly engine: SyncEngine,
-    readonly selectedPart: () => number,
+    readonly engine: ControlEngine,
+    readonly selectedPart: () => number = () => 0,
   ) {}
 
   register(address: number, refresh: Refresh): void {
@@ -71,9 +85,11 @@ export class ControlRegistry {
 let nextId = 0;
 const uid = (prefix: string) => `${prefix}-${++nextId}`;
 
+const FIRMWARE_NAME = { yamplus: 'BAMBI (YAM+)', shooz: 'SHOOZ' } as const;
+
 function availabilityTitle(def: ParamDef, supported: boolean): string {
   const base = `${def.name} · NRPN ${def.address}${def.cc !== undefined ? ` · CC ${def.cc}` : ''}`;
-  return supported ? base : `${base} · needs BAMBI (YAM+) firmware`;
+  return supported || !def.since ? base : `${base} · needs ${FIRMWARE_NAME[def.since]} firmware`;
 }
 
 function nameEl(def: ParamDef, label: string, id: string): HTMLElement {
@@ -81,7 +97,7 @@ function nameEl(def: ParamDef, label: string, id: string): HTMLElement {
     'span',
     { class: 'ctl-name', id },
     label,
-    def.since ? h('span', { class: 'badge-plus', title: 'BAMBI (YAM+) parameter' }, '+') : null,
+    def.since ? h('span', { class: 'badge-plus', title: `${FIRMWARE_NAME[def.since]} parameter` }, '+') : null,
   );
 }
 
