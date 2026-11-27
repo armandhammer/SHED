@@ -167,6 +167,34 @@ Needs BAMBI 0.2 on the controller (badge `BAMBI · YAM+ 0.2`).
       greyed out. Loading a library part saved with `4x unison` sets the
       voice mode to `2x unison`, on the synth too.
 
+## 11. BAMBI 0.3 voice steal
+
+Needs BAMBI 0.3 or later on the controller.
+
+- [ ] Part section, **Voice steal**: pick `lowest`; the Ambika's voice LFO
+      page shows `stl low`. Change it on the Ambika to `none`: SHED follows.
+- [ ] With BAMBI 0.2 or stock YAM: the control is greyed out, and a library
+      part saved with `lowest` loads as `oldest`.
+
+## 12. BAMBI 0.4 voice LFO trigger/slew, velocity curve
+
+Needs BAMBI 0.4 on the controller **and** the voicecards (badge
+`BAMBI · YAM+ 0.4`, voicecards v1.3).
+
+- [ ] Voice LFO card: **Trigger** `once` and **Slew** 60 in SHED; the
+      Ambika's third ENV/LFO page shows `trig once` and `slew 60`. With a
+      matrix slot `lfo4 -> cutoff`, each note sweeps once (`ramp`) or gets
+      one random value (`s&h`).
+- [ ] Part section, **Velocity curve** `soft` / `hard`: the Ambika shows
+      `velo soft` / `velo hard`, and soft playing gets louder/quieter (with
+      `velo -> vca` routed).
+- [ ] Change all three on the Ambika's front panel: SHED follows and flashes.
+- [ ] Save patch in the librarian, Init, load it back: trigger, slew and
+      curve return.
+- [ ] With BAMBI 0.3 or stock YAM: all three are greyed out (tooltip:
+      "needs BAMBI (YAM+) 0.4 firmware"), and loading that library patch
+      shows free / 0 / linear.
+
 ## Firmware notes found while auditing
 
 These are in the firmware (stock YAM and BAMBI), not in SHED:

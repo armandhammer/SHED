@@ -15,18 +15,22 @@ type Listener = (e: { data: Uint8Array; timeStamp: number }) => void;
 export interface VirtualSetup {
   firmware: 'stock' | 'yamplus';
   outMode: OutMode;
+  /** `&bambi=0.3`: an older BAMBI release (YAM+ version byte); default newest. */
+  yamPlusVersion?: number;
 }
 
-/** Reads `?virtual=bambi|stock&outp=…` from a query string; null if absent. */
+/** Reads `?virtual=bambi|stock&outp=…&bambi=0.N` from a query string; null if absent. */
 export function virtualSetupFromQuery(search: string): VirtualSetup | null {
   const q = new URLSearchParams(search);
   const v = q.get('virtual');
   if (v === null || v === 'shooz' || v === 'shruthi') return null;
   const outp = q.get('outp');
   const outModes: OutMode[] = ['thru', 'sequencer', 'controllr', 'chain', 'full'];
+  const release = /^0\.([1-9])$/.exec(q.get('bambi') ?? '');
   return {
     firmware: v === 'stock' ? 'stock' : 'yamplus',
     outMode: outModes.includes(outp as OutMode) ? (outp as OutMode) : 'controllr',
+    ...(release ? { yamPlusVersion: Number(release[1]) } : {}),
   };
 }
 

@@ -8,6 +8,7 @@ import { fromByte } from '../src/model/params/types';
 import { StorageObject } from '../src/protocol/ambika';
 import { RequestTimeout } from '../src/protocol/client';
 import { IN_FILTER, VirtualAmbika, type OutMode } from '../src/sim/virtual-ambika';
+import { virtualSetupFromQuery } from '../src/sim/virtual-midi';
 import { splitMessages } from '../src/sync/echo';
 import { SyncEngine } from '../src/sync/engine';
 import { FakeClock } from './fake-clock';
@@ -300,6 +301,84 @@ describe('SHED against the simulated Ambika', () => {
       clock.advance(2000);
       expect(synth.byte(5, PART_BASE + 80)).toBe(2);
       expect(synth.byte(5, PART_BASE + 81)).toBe(1);
+    });
+  });
+
+  describe('BAMBI 0.4 voice LFO trigger/slew and velocity curve', () => {
+    const trig = param('lfo4.trigger');
+    const slew = param('lfo4.slew');
+    const curve = param('voice.velocityCurve');
+
+    it('offers them to BAMBI 0.4 and sends them by NRPN 110 / 111 / 30', async () => {
+      const { clock, engine, synth, settle } = rig({ firmware: 'yamplus' });
+      await settle(engine.detect());
+      for (const d of [trig, slew, curve]) expect(engine.supports(d)).toBe(true);
+      expect(engine.valueMax(trig)).toBe(2);
+      expect(engine.valueMax(slew)).toBe(127);
+      engine.set(3, trig, 2);
+      engine.set(3, slew, 90);
+      engine.set(3, curve, 1);
+      clock.advance(300);
+      expect([synth.byte(3, 110), synth.byte(3, 111), synth.byte(3, 30)]).toEqual([2, 90, 1]);
+      // Front-panel changes show up in SHED.
+      synth.turnKnob(3, trig.address, 1);
+      synth.turnKnob(3, curve.address, 2);
+      clock.advance(300);
+      expect(engine.value(3, trig)).toBe(1);
+      expect(engine.value(3, curve)).toBe(2);
+    });
+
+    it('reports patch layout 2 and voicecard 0x13 from 0.4, layout 1 from 0.3', async () => {
+      for (const [version, layout, voicecard] of [[0x04, 2, 0x13], [0x03, 1, 0x12]]) {
+        const { engine, settle } = rig({ firmware: 'yamplus', yamPlusVersion: version });
+        await settle(engine.detect());
+        expect(engine.client.firmware?.patchLayout).toBe(layout);
+        expect(engine.client.firmware?.voicecards[0].version).toBe(voicecard);
+      }
+    });
+
+    it('greys them out on BAMBI 0.3 and stock YAM, which ignore them', async () => {
+      for (const opts of [{ firmware: 'yamplus' as const, yamPlusVersion: 0x03 }, { firmware: 'stock' as const }]) {
+        const { clock, engine, synth, settle } = rig(opts);
+        await settle(engine.detect());
+        for (const d of [trig, slew, curve]) {
+          expect(engine.supports(d)).toBe(false);
+          expect(engine.valueMax(d)).toBe(0);
+        }
+        engine.set(0, slew, 50);
+        clock.advance(300);
+        expect(engine.value(0, slew)).toBe(0);
+        // A library patch saved from 0.4 plays (and shows) the stock behaviour.
+        const patch = new Uint8Array(synth.parts[0].patch);
+        patch[110] = 2;
+        patch[111] = 64;
+        patch[30] = 2;
+        engine.loadPart(0, patch);
+        clock.advance(2000);
+        for (const d of [trig, slew, curve]) {
+          expect(engine.value(0, d)).toBe(0);
+          expect(synth.byte(0, d.address)).toBe(0);
+        }
+      }
+    });
+
+    it('can simulate an older BAMBI release from the URL', () => {
+      expect(virtualSetupFromQuery('?virtual=bambi&bambi=0.3')?.yamPlusVersion).toBe(3);
+      expect(virtualSetupFromQuery('?virtual=bambi')?.yamPlusVersion).toBeUndefined();
+      expect(virtualSetupFromQuery('?virtual=bambi&bambi=1.5')?.yamPlusVersion).toBeUndefined();
+    });
+
+    it('loads a library patch with its LFO trigger, slew and curve into 0.4', async () => {
+      const { clock, engine, synth, settle } = rig({ firmware: 'yamplus' });
+      await settle(engine.detect());
+      const patch = new Uint8Array(synth.parts[4].patch);
+      patch[110] = 1;
+      patch[111] = 33;
+      patch[30] = 2;
+      engine.loadPart(4, patch);
+      clock.advance(2000);
+      expect([synth.byte(4, 110), synth.byte(4, 111), synth.byte(4, 30)]).toEqual([1, 33, 2]);
+      expect(engine.value(4, slew)).toBe(33);
     });
   });
 });

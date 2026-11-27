@@ -121,9 +121,16 @@ export class SyncEngine extends Emitter<EngineEvents> {
     return this.client.mode;
   }
 
-  /** True if the parameter exists on the connected firmware. */
+  /**
+   * True if the parameter exists on the connected firmware: not on stock YAM
+   * for BAMBI parameters, and not on older BAMBI when every value but the
+   * default is newer (`valuesSince.from` = min + 1, e.g. the 0.4 voice LFO
+   * trigger: 0.3 ignores its NRPN).
+   */
   supports(def: ParamDef): boolean {
-    return !def.since || this.client.mode !== 'stock';
+    if (def.since && this.client.mode === 'stock') return false;
+    const gate = def.valuesSince;
+    return !(gate && gate.from === def.min + 1 && this.lacksValues(def));
   }
 
   /**
@@ -271,6 +278,13 @@ export class SyncEngine extends Emitter<EngineEvents> {
         const i = def.address - PART_BASE;
         this.parts[part].part[i] = this.forFirmware(def, this.parts[part].part[i]);
       }
+    }
+    // Same for patch settings (BAMBI 0.4 voice LFO trigger/slew, velocity
+    // curve): older firmware would store them but play the default, so show
+    // and send the default.
+    for (const def of AMBIKA_PARAMS) {
+      if (def.level !== 'patch' || !def.valuesSince) continue;
+      this.parts[part].patch[def.address] = toByte(def, this.forFirmware(def, fromByte(def, this.parts[part].patch[def.address])));
     }
     this.emit('part', { part, origin: 'load' });
     this.pushPatch(part);

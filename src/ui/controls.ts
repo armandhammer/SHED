@@ -89,7 +89,10 @@ const FIRMWARE_NAME = { yamplus: 'BAMBI (YAM+)', shooz: 'SHOOZ' } as const;
 
 function availabilityTitle(def: ParamDef, supported: boolean): string {
   const base = `${def.name} · NRPN ${def.address}${def.cc !== undefined ? ` · CC ${def.cc}` : ''}`;
-  return supported || !def.since ? base : `${base} · needs ${FIRMWARE_NAME[def.since]} firmware`;
+  if (supported || !def.since) return base;
+  const v = def.valuesSince?.yamPlus;
+  const version = def.since === 'yamplus' && v ? ` ${v >> 4}.${v & 15}` : '';
+  return `${base} · needs ${FIRMWARE_NAME[def.since]}${version} firmware`;
 }
 
 function nameEl(def: ParamDef, label: string, id: string): HTMLElement {

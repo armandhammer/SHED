@@ -24,12 +24,12 @@ import { clamp, formatValue, fromByte, toByte } from '../src/model/params/types'
 // prettier-ignore
 const FIRMWARE_NRPN_MAP = [
   0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-  16, 17, 18, 19, 20, 21, 22, 23, 25, 26, 27, 28, 31, 30, 255, 29,
+  16, 17, 18, 19, 20, 21, 22, 23, 25, 26, 27, 28, 31, 30, 83, 29,
   25, 26, 27, 28, 31, 30, 255, 29, 25, 26, 27, 28, 31, 30, 255, 29,
   33, 32, 35, 36, 37, 35, 36, 37, 35, 36, 37, 35, 36, 37, 35, 36,
   37, 35, 36, 37, 35, 36, 37, 35, 36, 37, 35, 36, 37, 35, 36, 37,
   35, 36, 37, 35, 36, 37, 35, 36, 37, 35, 36, 37, 39, 40, 41, 39,
-  40, 41, 39, 40, 41, 39, 40, 41, 73, 74, 75, 76, 77, 78, 255, 255,
+  40, 41, 39, 40, 41, 39, 40, 41, 73, 74, 75, 76, 77, 78, 81, 82,
   42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57,
   ...new Array(64).fill(254),
   79, 80, ...new Array(62).fill(255),
@@ -45,7 +45,7 @@ const FIRMWARE_CC_MAP = [
   255, 255, 255, 255, 47, 255, 27, 17, 28, 25, 16, 26, 255, 255, 27, 255,
   28, 25, 255, 26, 255, 255, 27, 255, 28, 25, 255, 26, 255, 255, 44, 45,
   255, 255, 255, 255, 255, 255, 49, 50, 51, 52, 53, 57, 73, 74, 75, 76,
-  77, 78, 79, 80, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+  77, 78, 79, 80, 81, 82, 83, 255, 255, 255, 255, 255, 255, 255, 255, 255,
 ];
 
 describe('Ambika parameter map', () => {
@@ -153,6 +153,21 @@ describe('Ambika parameter map', () => {
     expect(steal.labels).toEqual(['oldest', 'lowest', 'highest', 'none']);
     expect(steal.valuesSince).toEqual({ from: 1, yamPlus: 0x03, fallback: 0 });
     expect(INIT_PART[81]).toBe(0);
+  });
+
+  it('has the BAMBI 0.4 voice LFO trigger/slew and velocity curve', () => {
+    const trig = param('lfo4.trigger');
+    const slew = param('lfo4.slew');
+    const curve = param('voice.velocityCurve');
+    expect([trig.address, trig.cc, trig.since, trig.level]).toEqual([110, 116, 'yamplus', 'patch']);
+    expect([slew.address, slew.cc, slew.min, slew.max]).toEqual([111, 117, 0, 127]);
+    expect([curve.address, curve.cc, curve.since, curve.level]).toEqual([30, 118, 'yamplus', 'patch']);
+    // Order of VoiceLfoMode / VelocityCurve in BAMBI common/patch.h.
+    expect(trig.labels).toEqual(['free', 'env→lfo', 'once']);
+    expect(curve.labels).toEqual(['linear', 'soft', 'hard']);
+    for (const d of [trig, slew, curve]) expect(d.valuesSince).toEqual({ from: 1, yamPlus: 0x04, fallback: 0 });
+    // The default patch keeps the stock behaviour.
+    for (const d of [trig, slew, curve]) expect(INIT_PATCH[d.address]).toBe(0);
   });
 
   it('formats LFO rates as synced divisions then free values', () => {
