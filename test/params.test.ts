@@ -32,7 +32,7 @@ const FIRMWARE_NRPN_MAP = [
   40, 41, 39, 40, 41, 39, 40, 41, 73, 74, 75, 76, 77, 78, 255, 255,
   42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57,
   ...new Array(64).fill(254),
-  79, ...new Array(63).fill(255),
+  79, 80, ...new Array(62).fill(255),
 ];
 
 // `midi_cc_map` from the same file: CC → parameter id (255 = none).
@@ -45,7 +45,7 @@ const FIRMWARE_CC_MAP = [
   255, 255, 255, 255, 47, 255, 27, 17, 28, 25, 16, 26, 255, 255, 27, 255,
   28, 25, 255, 26, 255, 255, 27, 255, 28, 25, 255, 26, 255, 255, 44, 45,
   255, 255, 255, 255, 255, 255, 49, 50, 51, 52, 53, 57, 73, 74, 75, 76,
-  77, 78, 79, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+  77, 78, 79, 80, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
 ];
 
 describe('Ambika parameter map', () => {
@@ -144,6 +144,15 @@ describe('Ambika parameter map', () => {
     expect(spread.max).toBe(3);
     expect(formatValue(spread, 3)).toBe('sub oct');
     expect(spread.valuesSince).toEqual({ from: 3, yamPlus: 0x02, fallback: 1 });
+  });
+
+  it('has the BAMBI 0.3 voice steal mode at part byte 81 / NRPN 193 / CC 115', () => {
+    const steal = param('part.stealMode');
+    expect([steal.address, steal.cc, steal.since, steal.level]).toEqual([193, 115, 'yamplus', 'part']);
+    // Order of StealMode in BAMBI controller/part.h.
+    expect(steal.labels).toEqual(['oldest', 'lowest', 'highest', 'none']);
+    expect(steal.valuesSince).toEqual({ from: 1, yamPlus: 0x03, fallback: 0 });
+    expect(INIT_PART[81]).toBe(0);
   });
 
   it('formats LFO rates as synced divisions then free values', () => {

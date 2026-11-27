@@ -261,7 +261,8 @@ export class SyncEngine extends Emitter<EngineEvents> {
       if (partData.length !== PART_SIZE) throw new Error('bad part size');
       // Keep the hardware's sequencer data: only the settings travel as NRPN.
       this.parts[part].part.set(partData.subarray(0, 16), 0);
-      this.parts[part].part[80] = partData[80];
+      // YAM+ spread mode and BAMBI 0.3 steal mode.
+      this.parts[part].part.set(partData.subarray(80, 82), 80);
       // A part saved from newer BAMBI firmware: values this synth lacks
       // become the closest older one (4x unison -> 2x unison on stock YAM;
       // the firmware itself would clamp to its maximum, chain).

@@ -410,8 +410,8 @@ function part(reg: ControlRegistry, mappingInfo: HTMLElement): HTMLElement {
       menu(reg, p('part.polyphony'), 'Voice mode'),
       menu(reg, p('part.raga'), 'Raga'),
       leds(reg, p('part.spreadMode'), 'Spread mode'),
-      ledToggle(reg, p('part.legato'), 'Legato'),
     ),
+    row('controls', leds(reg, p('part.stealMode'), 'Voice steal'), ledToggle(reg, p('part.legato'), 'Legato')),
     row('controls', k(reg, 'part.volume', 'Volume'), k(reg, 'part.octave', 'Octave'), k(reg, 'part.tuning', 'Tuning'), k(reg, 'part.spread', 'Spread'), k(reg, 'part.portamento', 'Glide')),
   );
 }
