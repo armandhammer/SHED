@@ -165,7 +165,7 @@ Needs BAMBI 0.2 on the controller (badge `BAMBI · YAM+ 0.2`).
       follows.
 - [ ] With BAMBI 0.1 or stock YAM: both new voice modes and `sub oct` are
       greyed out. Loading a library part saved with `4x unison` sets the
-      voice mode to `chain` (the highest older value), on the synth too.
+      voice mode to `2x unison`, on the synth too.
 
 ## Firmware notes found while auditing
 

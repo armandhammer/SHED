@@ -35,9 +35,10 @@ export interface ParamDef {
   readonly since?: 'yamplus' | 'shooz';
   /**
    * Enum values from `from` up exist only in BAMBI with a YAM+ version of at
-   * least `yamPlus` (major << 4 | minor, as in the 0x1c version reply).
+   * least `yamPlus` (major << 4 | minor, as in the 0x1c version reply). On
+   * older firmware they are replaced by `fallback`, the closest older value.
    */
-  readonly valuesSince?: { readonly from: number; readonly yamPlus: number };
+  readonly valuesSince?: { readonly from: number; readonly yamPlus: number; readonly fallback: number };
   /** Default value used by the init patch. */
   readonly init?: number;
 }

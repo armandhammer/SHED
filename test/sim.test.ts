@@ -211,17 +211,17 @@ describe('SHED against the simulated Ambika', () => {
         const { clock, engine, synth, settle } = rig(opts);
         await settle(engine.detect());
         expect(engine.valueMax(mode)).toBe(4);
-        engine.set(0, mode, 5);
+        engine.set(0, mode, 5); // e.g. typed in: 3x unison -> 2x unison, not chain
         clock.advance(200);
-        expect(engine.value(0, mode)).toBe(4);
-        expect(synth.byte(0, mode.address)).toBe(4);
+        expect(engine.value(0, mode)).toBe(2);
+        expect(synth.byte(0, mode.address)).toBe(2);
       }
       const old = rig({ firmware: 'yamplus', yamPlusVersion: 0x01 });
       await old.settle(old.engine.detect());
       expect(old.engine.valueMax(spreadMode)).toBe(2);
     });
 
-    it('clamps a librarian part with 4x unison when loading it into stock YAM', async () => {
+    it('loads a librarian part with 4x unison into stock YAM as 2x unison', async () => {
       const { clock, engine, synth, settle } = rig({ firmware: 'stock' });
       await settle(engine.detect());
       const patch = new Uint8Array(synth.parts[1].patch);
@@ -229,8 +229,8 @@ describe('SHED against the simulated Ambika', () => {
       part[mode.address - PART_BASE] = 6;
       engine.loadPart(1, patch, part);
       clock.advance(2000);
-      expect(engine.value(1, mode)).toBe(4);
-      expect(synth.byte(1, mode.address)).toBe(4);
+      expect(engine.value(1, mode)).toBe(2);
+      expect(synth.byte(1, mode.address)).toBe(2);
     });
 
     it('is permissive before the firmware is known', () => {

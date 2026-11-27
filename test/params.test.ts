@@ -139,11 +139,11 @@ describe('Ambika parameter map', () => {
     // Order of PolyphonyMode / SpreadMode in BAMBI controller/part.h.
     const mode = param('part.polyphony');
     expect(mode.labels).toEqual(['mono', 'poly', '2x unison', 'cyclic', 'chain', '3x unison', '4x unison']);
-    expect(mode.valuesSince).toEqual({ from: 5, yamPlus: 0x02 });
+    expect(mode.valuesSince).toEqual({ from: 5, yamPlus: 0x02, fallback: 2 });
     const spread = param('part.spreadMode');
     expect(spread.max).toBe(3);
     expect(formatValue(spread, 3)).toBe('sub oct');
-    expect(spread.valuesSince).toEqual({ from: 3, yamPlus: 0x02 });
+    expect(spread.valuesSince).toEqual({ from: 3, yamPlus: 0x02, fallback: 1 });
   });
 
   it('formats LFO rates as synced divisions then free values', () => {

@@ -107,7 +107,7 @@ On connect, SHED sends the BAMBI version request (SysEx `0x1c`).
   number, so several requests can be in flight at once and each reply goes to
   the right part. BAMBI 0.2 adds the voice modes `3x unison` / `4x unison`
   and the spread mode `sub oct`; with older firmware they are shown greyed
-  out, and a library part that uses them loads as the nearest older value.
+  out, and a library part that uses them loads as `2x unison` / `center`.
 - **No reply within 700 ms** means stock YAM (or another Ambika firmware). The
   `+` parameters are disabled, and SHED sends one request at a time so it
   always knows which part a reply belongs to. Stock YAM doesn't know the

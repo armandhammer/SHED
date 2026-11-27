@@ -109,7 +109,7 @@ interface Spec {
   cc?: number;
   instance?: number;
   since?: 'yamplus';
-  valuesSince?: { from: number; yamPlus: number };
+  valuesSince?: { from: number; yamPlus: number; fallback: number };
 }
 
 const defs: ParamDef[] = [];
@@ -219,8 +219,8 @@ add(123, { id: 'arp.resolution', name: 'Arp grid', short: 'grid', group: 'arp', 
 for (let i = 0; i < 3; i++) {
   add(124 + i, { id: `seq.length${i + 1}`, name: i < 2 ? `Seq ${i + 1} length` : 'Pattern length', short: i < 2 ? `len${i + 1}` : 'lenp', group: 'seq', unit: 'uint', min: 1, max: 32, instance: i });
 }
-add(127, { id: 'part.polyphony', name: 'Voice mode', short: 'mode', group: 'part', ...e(POLYPHONY_MODES), cc: 107, valuesSince: { from: 5, yamPlus: YAMPLUS_0_2 } });
-add(192, { id: 'part.spreadMode', name: 'Spread mode', short: 'sprm', group: 'part', ...e(SPREAD_MODES), cc: 114, since: 'yamplus', valuesSince: { from: 3, yamPlus: YAMPLUS_0_2 } });
+add(127, { id: 'part.polyphony', name: 'Voice mode', short: 'mode', group: 'part', ...e(POLYPHONY_MODES), cc: 107, valuesSince: { from: 5, yamPlus: YAMPLUS_0_2, fallback: 2 } });
+add(192, { id: 'part.spreadMode', name: 'Spread mode', short: 'sprm', group: 'part', ...e(SPREAD_MODES), cc: 114, since: 'yamplus', valuesSince: { from: 3, yamPlus: YAMPLUS_0_2, fallback: 1 } });
 
 export const AMBIKA_PARAMS: readonly ParamDef[] = defs.sort((a, b) => a.address - b.address);
 
