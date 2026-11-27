@@ -177,12 +177,12 @@ function keyboard(reg: ControlRegistry): HTMLElement {
   );
 }
 
-function system(reg: ControlRegistry): HTMLElement {
+function system(reg: ControlRegistry, saveButton: HTMLElement | null): HTMLElement {
   return section(
     'part',
     'System',
     12,
-    'applied live; saved from the Shruthi’s own system page',
+    'applied live; saved with “Save system” or the Shruthi’s system page',
     row(
       'controls',
       m(reg, 'sys.filterBoard', 'Filter board'),
@@ -191,11 +191,23 @@ function system(reg: ControlRegistry): HTMLElement {
       k(reg, 'sys.tuning', 'Tuning'),
       k(reg, 'sys.vintage', 'Vintage'),
     ),
+    // SHOOZ "filter cal" page: how this unit's filter board responds.
+    h('h3', { class: 'sub-heading' }, h('span', {}, 'Filter calibration'), h('span', { class: 'sec-note' }, 'per unit, not per patch')),
+    row(
+      'controls',
+      m(reg, 'sys.filterProfile', 'Profile'),
+      k(reg, 'sys.filterCutoffOffset', 'Cutoff offset', 'sm'),
+      k(reg, 'sys.filterResonanceMax', 'Reso max', 'sm'),
+      saveButton,
+    ),
   );
 }
 
-/** Every section of the Shruthi panel, in reading order. */
-export function shruthiPanel(reg: ControlRegistry): HTMLElement {
+/**
+ * Every section of the Shruthi panel, in reading order. `saveSystemButton`
+ * (wired by the app) goes next to the filter calibration.
+ */
+export function shruthiPanel(reg: ControlRegistry, saveSystemButton: HTMLElement | null = null): HTMLElement {
   return h(
     'div',
     { class: 'panel-grid' },
@@ -209,6 +221,6 @@ export function shruthiPanel(reg: ControlRegistry): HTMLElement {
     modulation(reg),
     sequencer(reg),
     keyboard(reg),
-    system(reg),
+    system(reg, saveSystemButton),
   );
 }

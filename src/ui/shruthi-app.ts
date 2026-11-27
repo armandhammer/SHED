@@ -60,6 +60,11 @@ export function startShruthiApp(root: HTMLElement): void {
   const initBtn = action('Init', 'Reset to the init patch and send it');
   const writeBtn = action('Write…', 'Store the edit buffer in a patch slot on the Shruthi (SysEx 0x21)');
   const libraryBtn = action('Library', 'Jump to the librarian');
+  const saveSystemBtn = h(
+    'button',
+    { type: 'button', class: 'panel-btn', title: 'Send the system settings back to the Shruthi, which saves them (SysEx 0x04). SHOOZ also saves the filter calibration.' },
+    'Save system',
+  );
   libraryBtn.addEventListener('click', () => document.getElementById('librarian')?.scrollIntoView({ behavior: 'smooth' }));
   const header = h(
     'header',
@@ -82,7 +87,7 @@ export function startShruthiApp(root: HTMLElement): void {
     'div',
     { class: 'instrument instrument-shruthi' },
     h('div', { class: 'cheek cheek-left', 'aria-hidden': 'true' }),
-    h('main', { class: 'panel-body' }, header, shruthiPanel(reg), footer),
+    h('main', { class: 'panel-body' }, header, shruthiPanel(reg, saveSystemBtn), footer),
     h('div', { class: 'cheek cheek-right', 'aria-hidden': 'true' }),
   );
   const rack = h(
@@ -157,7 +162,7 @@ export function startShruthiApp(root: HTMLElement): void {
         ' only echoes).',
       );
     }
-    if (engine.mode === 'stock') add('info', 'Stock YAM detected: SHOOZ parameters (envelope curves, vintage, marked +) are disabled.');
+    if (engine.mode === 'stock') add('info', 'Stock YAM detected: SHOOZ parameters (envelope curves, vintage, filter calibration, marked +) are disabled.');
   };
 
   const renderFirmware = () => {
@@ -262,6 +267,13 @@ export function startShruthiApp(root: HTMLElement): void {
   });
 
   pullBtn.addEventListener('click', () => void pull());
+  saveSystemBtn.addEventListener('click', () => {
+    if (!engine.saveSystem()) {
+      log('warn', 'Pull first: SHED saves system settings only after reading them from the Shruthi');
+      return;
+    }
+    log('info', engine.mode === 'shooz' ? 'Saved the system settings and filter calibration on the Shruthi' : 'Saved the system settings on the Shruthi');
+  });
   pushBtn.addEventListener('click', () => {
     engine.pushPatch();
     log('info', `Sent “${engine.name}” to the Shruthi`);

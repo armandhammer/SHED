@@ -114,7 +114,7 @@ export class ShruthiClient extends Emitter<ShruthiClientEvents> {
   /** Version probe; sets `mode` to shooz, stock or absent. */
   async detect(): Promise<ShruthiMode> {
     try {
-      const frame = await this.request('version', shruthiRequest(SHRUTHI_CMD.versionRequest), SHRUTHI_CMD.versionReply, 8);
+      const frame = await this.request('version', shruthiRequest(SHRUTHI_CMD.versionRequest), SHRUTHI_CMD.versionReply, 11);
       this.firmware = parseShruthiVersion(frame.payload);
       this.mode = this.firmware.shooz ? 'shooz' : 'stock';
     } catch (e) {

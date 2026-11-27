@@ -42,7 +42,14 @@ describe('Shruthi panel definitions', () => {
 
   it('marks the SHOOZ-only parameters', () => {
     const shooz = SHRUTHI_PARAMS.filter((p) => !p.id.includes('#') && sdef(p.id).since === 'shooz').map((p) => p.id);
-    expect(shooz).toEqual(['sys.vintage', 'env1.curve', 'env2.curve']);
+    expect(shooz).toEqual([
+      'sys.vintage',
+      'env1.curve',
+      'env2.curve',
+      'sys.filterProfile',
+      'sys.filterCutoffOffset',
+      'sys.filterResonanceMax',
+    ]);
     expect(CURVE_PRESET_VALUES).toHaveLength(sdef('env1.curve').max + 1);
   });
 

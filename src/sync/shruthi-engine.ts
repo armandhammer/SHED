@@ -1,9 +1,12 @@
 // Bidirectional sync between the browser model and a Shruthi-1 (stock YAM or
 // SHOOZ). The counterpart of `engine.ts` for a single-part synth.
 //
-// The model is the firmware's whole parameter address space (159 bytes:
-// patch RAM, sequencer settings, system settings, SHOOZ curves), so a
-// parameter's byte offset is both its model index and its NRPN number.
+// The model is the firmware's whole parameter address space (162 bytes:
+// patch RAM, sequencer settings, system settings, SHOOZ curves and filter
+// calibration), so a parameter's byte offset is both its model index and
+// its NRPN number. The filter calibration is read from the SHOOZ version
+// reply (no other message carries it) and saved with the system settings
+// (`saveSystem`, SysEx 0x04).
 //
 // Browser → hardware
 //   - edits go out as NRPN (always with the address: the Shruthi resets its
@@ -43,6 +46,7 @@ import {
   acceptsPatch,
   applyWirePatch,
   shruthiPatchDump,
+  shruthiSystemDump,
   shruthiWriteRequest,
   wirePatchFromSpace,
 } from '../protocol/shruthi';
@@ -92,6 +96,7 @@ export class ShruthiEngine extends Emitter<ShruthiEngineEvents> {
     super();
     this.mem.set(shruthiInitSequencer(), SHRUTHI_OFFSET.sequencer);
     this.mem.set(shruthiInitSystem(), SYS);
+    this.mem[SHRUTHI_OFFSET.filterResonanceMax] = 127; // firmware default
     applyWirePatch(this.mem, shruthiInitPatch(), 'shooz');
     this.echo = new EchoFilter(clock, () =>
       this.log('info', 'The Shruthi returns what SHED sends (MIDI out thru, full or chain); SHED ignores those echoes.'),
@@ -216,6 +221,19 @@ export class ShruthiEngine extends Emitter<ShruthiEngineEvents> {
     return true;
   }
 
+  /**
+   * Sends the system settings back as SysEx 0x04: the synth applies and
+   * saves them, and SHOOZ also saves the filter calibration. Refused until
+   * the settings were read from the synth, so that SHED never overwrites
+   * them with its defaults.
+   */
+  saveSystem(): boolean {
+    if (!this.systemKnown) return false;
+    const system = this.mem.slice(SYS, SYS + SHRUTHI_SYSTEM_SIZE);
+    this.scheduler.enqueue({ lane: 'bulk', key: 'system', gapAfterMs: PATCH_PUSH_GAP_MS, build: () => shruthiSystemDump(system) });
+    return true;
+  }
+
   /** Stores the edit buffer in a slot (0-based) on the synth. */
   writeSlot(slot: number): void {
     this.scheduler.enqueue({ lane: 'bulk', build: () => shruthiWriteRequest(SHRUTHI_CMD.writePatch, slot), gapAfterMs: PATCH_PUSH_GAP_MS });
@@ -296,6 +314,15 @@ export class ShruthiEngine extends Emitter<ShruthiEngineEvents> {
   /** Version probe: SHOOZ, stock YAM or no Shruthi at all. */
   async detect(): Promise<ShruthiMode> {
     const mode = await this.withBusy(() => this.client.detect());
+    const cal = this.client.firmware?.shooz?.filterCal;
+    if (cal) {
+      cal.forEach((byte, i) => {
+        const address = SHRUTHI_OFFSET.filterProfile + i;
+        if (this.mem[address] === byte) return;
+        this.mem[address] = byte;
+        this.emit('param', { address, byte, origin: 'hardware' });
+      });
+    }
     this.emit('mode', mode);
     return mode;
   }
