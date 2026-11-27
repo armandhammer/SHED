@@ -84,6 +84,10 @@ export const POLYPHONY_MODES = ['mono', 'poly', '2x unison', 'cyclic', 'chain', 
 export const SPREAD_MODES = ['stack', 'center', 'wide', 'sub oct'] as const;
 /** YAM+ 0.2 (BAMBI): 3x/4x unison (polyphony 5, 6) and the sub-octave spread mode (3). */
 export const YAMPLUS_0_2 = 0x02;
+/** Order of StealMode in BAMBI controller/part.h: which held note a full part cuts. */
+export const STEAL_MODES = ['oldest', 'lowest', 'highest', 'none'] as const;
+/** YAM+ 0.3 (BAMBI): the voice steal mode (part byte 81, part layout 2). */
+export const YAMPLUS_0_3 = 0x03;
 export const NUM_ARP_PATTERNS = 22;
 export const RAGAS = [
   'equal', 'just', 'pythagorean', '1/4 eb', '1/4 e', '1/4 ea',
@@ -202,7 +206,7 @@ for (let i = 0; i < 3; i++) {
 }
 add(109, { id: 'voice.vintage', name: 'Vintage', short: 'vint', group: 'voice', unit: 'uint', min: 0, max: 127, cc: 113, since: 'yamplus' });
 
-// Part: 112–127, 192.
+// Part: 112–127, 192–193.
 add(112, { id: 'part.volume', name: 'Volume', short: 'volu', group: 'part', unit: 'raw', min: 0, max: 127, cc: 7 });
 add(113, { id: 'part.octave', name: 'Octave', short: 'octv', group: 'part', unit: 'int', min: -2, max: 2 });
 add(114, { id: 'part.tuning', name: 'Tuning', short: 'tune', group: 'part', unit: 'int', min: -127, max: 127, cc: 94 });
@@ -221,6 +225,9 @@ for (let i = 0; i < 3; i++) {
 }
 add(127, { id: 'part.polyphony', name: 'Voice mode', short: 'mode', group: 'part', ...e(POLYPHONY_MODES), cc: 107, valuesSince: { from: 5, yamPlus: YAMPLUS_0_2, fallback: 2 } });
 add(192, { id: 'part.spreadMode', name: 'Spread mode', short: 'sprm', group: 'part', ...e(SPREAD_MODES), cc: 114, since: 'yamplus', valuesSince: { from: 3, yamPlus: YAMPLUS_0_2, fallback: 1 } });
+// BAMBI 0.3. Older YAM+ ignores NRPN 193, so every value but "oldest" (the
+// behaviour they have) is gated.
+add(193, { id: 'part.stealMode', name: 'Voice steal', short: 'stl', group: 'part', ...e(STEAL_MODES), cc: 115, since: 'yamplus', valuesSince: { from: 1, yamPlus: YAMPLUS_0_3, fallback: 0 } });
 
 export const AMBIKA_PARAMS: readonly ParamDef[] = defs.sort((a, b) => a.address - b.address);
 

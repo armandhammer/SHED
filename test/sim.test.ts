@@ -248,4 +248,58 @@ describe('SHED against the simulated Ambika', () => {
       expect(synth.byte(0, mode.address)).toBe(4);
     });
   });
+
+  describe('BAMBI 0.3 voice steal mode', () => {
+    const steal = param('part.stealMode');
+
+    it('offers every mode to BAMBI 0.3 and sends it by NRPN 193', async () => {
+      const { clock, engine, synth, settle } = rig({ firmware: 'yamplus' });
+      await settle(engine.detect());
+      expect(engine.firmware).toBe('yamplus');
+      expect(engine.valueMax(steal)).toBe(3);
+      engine.set(2, steal, 2);
+      clock.advance(200);
+      expect(synth.byte(2, PART_BASE + 81)).toBe(2);
+      // A front-panel change shows up in SHED.
+      synth.turnKnob(2, steal.address, 3);
+      clock.advance(200);
+      expect(engine.value(2, steal)).toBe(3);
+    });
+
+    it('reports part layout 2 from BAMBI 0.3 and 1 from 0.2', async () => {
+      for (const [version, layout] of [[0x03, 2], [0x02, 1]]) {
+        const { engine, settle } = rig({ firmware: 'yamplus', yamPlusVersion: version });
+        await settle(engine.detect());
+        expect(engine.client.firmware?.partLayout).toBe(layout);
+      }
+    });
+
+    it('keeps BAMBI 0.2 and stock YAM on "oldest"', async () => {
+      for (const opts of [{ firmware: 'yamplus' as const, yamPlusVersion: 0x02 }, { firmware: 'stock' as const }]) {
+        const { clock, engine, synth, settle } = rig(opts);
+        await settle(engine.detect());
+        expect(engine.valueMax(steal)).toBe(0);
+        const patch = new Uint8Array(synth.parts[0].patch);
+        const part = new Uint8Array(synth.parts[0].data);
+        part[81] = 3; // a library part saved from BAMBI 0.3
+        engine.loadPart(0, patch, part);
+        clock.advance(2000);
+        expect(engine.value(0, steal)).toBe(0);
+        expect(synth.byte(0, PART_BASE + 81)).toBe(0);
+      }
+    });
+
+    it('loads a library part with its steal mode into BAMBI 0.3', async () => {
+      const { clock, engine, synth, settle } = rig({ firmware: 'yamplus' });
+      await settle(engine.detect());
+      const patch = new Uint8Array(synth.parts[5].patch);
+      const part = new Uint8Array(synth.parts[5].data);
+      part[80] = 2;
+      part[81] = 1;
+      engine.loadPart(5, patch, part);
+      clock.advance(2000);
+      expect(synth.byte(5, PART_BASE + 80)).toBe(2);
+      expect(synth.byte(5, PART_BASE + 81)).toBe(1);
+    });
+  });
 });
