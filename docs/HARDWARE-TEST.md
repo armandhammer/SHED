@@ -152,6 +152,21 @@ have (SMR4, CS-80, IR3109, Polivoks). Select **Shruthi-1** in the Synth menu.
 - [ ] Switch the Synth menu back to Ambika: the Ambika editor and its
       library entries come back.
 
+## 10. BAMBI 0.2 voice and spread modes
+
+Needs BAMBI 0.2 on the controller (badge `BAMBI · YAM+ 0.2`).
+
+- [ ] Voice mode menu: `3x unison` and `4x unison` are selectable (marked
+      +). Pick `3x unison`: the Ambika's part page shows it, and one key now
+      sounds on three voicecards.
+- [ ] Spread mode: pick `sub oct` with spread around 10: the last voice of
+      each stack plays an octave lower.
+- [ ] Change the voice mode on the Ambika's front panel to `4x unison`: SHED
+      follows.
+- [ ] With BAMBI 0.1 or stock YAM: both new voice modes and `sub oct` are
+      greyed out. Loading a library part saved with `4x unison` sets the
+      voice mode to `chain` (the highest older value), on the synth too.
+
 ## Firmware notes found while auditing
 
 These are in the firmware (stock YAM and BAMBI), not in SHED:

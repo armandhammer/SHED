@@ -12,7 +12,7 @@ import { splitMessages } from '../src/sync/echo';
 import { SyncEngine } from '../src/sync/engine';
 import { FakeClock } from './fake-clock';
 
-function rig(opts: { firmware: 'stock' | 'yamplus'; outMode?: OutMode; inFilter?: number }) {
+function rig(opts: { firmware: 'stock' | 'yamplus'; yamPlusVersion?: number; outMode?: OutMode; inFilter?: number }) {
   const clock = new FakeClock();
   const logs: string[] = [];
   // One serial line per direction: a message arrives after the previous one
@@ -184,5 +184,68 @@ describe('SHED against the simulated Ambika', () => {
     deaf.engine.set(0, cutoff, 5);
     deaf.clock.advance(100);
     expect(deaf.synth.byte(0, cutoff.address)).not.toBe(5);
+  });
+
+  describe('BAMBI 0.2 values (3x/4x unison, sub-octave spread)', () => {
+    const mode = param('part.polyphony');
+    const spreadMode = param('part.spreadMode');
+
+    it('offers and sends them to BAMBI 0.2', async () => {
+      const { clock, engine, synth, settle } = rig({ firmware: 'yamplus' });
+      await settle(engine.detect());
+      expect(engine.valueMax(mode)).toBe(6);
+      expect(engine.valueMax(spreadMode)).toBe(3);
+      engine.set(0, mode, 6);
+      engine.set(0, spreadMode, 3);
+      clock.advance(200);
+      expect(synth.byte(0, mode.address)).toBe(6);
+      expect(synth.byte(0, spreadMode.address)).toBe(3);
+      // A front-panel change to 3x unison shows up in SHED.
+      synth.turnKnob(0, mode.address, 5);
+      clock.advance(200);
+      expect(engine.value(0, mode)).toBe(5);
+    });
+
+    it('stops at the old maximum on BAMBI 0.1 and stock YAM', async () => {
+      for (const opts of [{ firmware: 'yamplus' as const, yamPlusVersion: 0x01 }, { firmware: 'stock' as const }]) {
+        const { clock, engine, synth, settle } = rig(opts);
+        await settle(engine.detect());
+        expect(engine.valueMax(mode)).toBe(4);
+        engine.set(0, mode, 5);
+        clock.advance(200);
+        expect(engine.value(0, mode)).toBe(4);
+        expect(synth.byte(0, mode.address)).toBe(4);
+      }
+      const old = rig({ firmware: 'yamplus', yamPlusVersion: 0x01 });
+      await old.settle(old.engine.detect());
+      expect(old.engine.valueMax(spreadMode)).toBe(2);
+    });
+
+    it('clamps a librarian part with 4x unison when loading it into stock YAM', async () => {
+      const { clock, engine, synth, settle } = rig({ firmware: 'stock' });
+      await settle(engine.detect());
+      const patch = new Uint8Array(synth.parts[1].patch);
+      const part = new Uint8Array(synth.parts[1].data);
+      part[mode.address - PART_BASE] = 6;
+      engine.loadPart(1, patch, part);
+      clock.advance(2000);
+      expect(engine.value(1, mode)).toBe(4);
+      expect(synth.byte(1, mode.address)).toBe(4);
+    });
+
+    it('is permissive before the firmware is known', () => {
+      const { engine } = rig({ firmware: 'yamplus' });
+      expect(engine.valueMax(mode)).toBe(6);
+    });
+
+    it('the simulated stock YAM clamps the NRPN itself', () => {
+      const { clock, synth } = rig({ firmware: 'stock' });
+      synth.receive(Uint8Array.of(0xb0, 99, 0));
+      synth.receive(Uint8Array.of(0xb0, 98, mode.address));
+      synth.receive(Uint8Array.of(0xb0, 6, 0));
+      synth.receive(Uint8Array.of(0xb0, 38, 6));
+      clock.advance(10);
+      expect(synth.byte(0, mode.address)).toBe(4);
+    });
   });
 });

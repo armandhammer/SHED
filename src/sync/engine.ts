@@ -126,6 +126,22 @@ export class SyncEngine extends Emitter<EngineEvents> {
     return !def.since || this.client.mode !== 'stock';
   }
 
+  /**
+   * Highest value the connected firmware accepts for `def`: the oscillator
+   * shape count from the version reply, and `valuesSince` gates (newer BAMBI
+   * enum values). Permissive until the firmware is known.
+   */
+  valueMax(def: ParamDef): number {
+    if (def.id.endsWith('.shape') && def.group.startsWith('osc')) return this.oscShapeMax;
+    const gate = def.valuesSince;
+    if (gate) {
+      const mode = this.client.mode;
+      const version = this.client.firmware?.yamPlusVersion ?? 0;
+      if (mode === 'stock' || (mode === 'yamplus' && version < gate.yamPlus)) return gate.from - 1;
+    }
+    return def.max;
+  }
+
   /** Highest selectable oscillator shape (from the BAMBI version reply, else all 43). */
   get oscShapeMax(): number {
     const n = this.client.firmware?.oscShapes;
@@ -170,8 +186,7 @@ export class SyncEngine extends Emitter<EngineEvents> {
 
   /** Sets a parameter from the UI (display value) and sends it as NRPN. */
   set(part: number, def: ParamDef, value: number): void {
-    let v = clamp(def, value);
-    if (def.id.endsWith('.shape') && def.group.startsWith('osc')) v = Math.min(v, this.oscShapeMax);
+    const v = Math.min(clamp(def, value), this.valueMax(def));
     this.setByte(part, def.address, toByte(def, v));
   }
 
@@ -237,6 +252,14 @@ export class SyncEngine extends Emitter<EngineEvents> {
       // Keep the hardware's sequencer data: only the settings travel as NRPN.
       this.parts[part].part.set(partData.subarray(0, 16), 0);
       this.parts[part].part[80] = partData[80];
+      // A part saved from newer BAMBI firmware: values this synth lacks
+      // (e.g. 3x unison on stock YAM) become its highest one, as the
+      // firmware would clamp the NRPN anyway.
+      for (const def of AMBIKA_PARAMS) {
+        if (def.level !== 'part' || !def.valuesSince) continue;
+        const i = def.address - PART_BASE;
+        this.parts[part].part[i] = Math.min(this.parts[part].part[i], this.valueMax(def));
+      }
     }
     this.emit('part', { part, origin: 'load' });
     this.pushPatch(part);

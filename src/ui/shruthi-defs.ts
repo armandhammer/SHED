@@ -91,7 +91,9 @@ export const CURVE_PRESET_VALUES = [0, 16, 32, 48, 64, 85, 106, 127] as const;
 
 /** ControlEngine over a ShruthiEngine (single part: the part index is ignored). */
 export class ShruthiControls implements ControlEngine {
-  readonly oscShapeMax = 0; // the Ambika shape list isn't used here
+  valueMax(def: ParamDef): number {
+    return def.max;
+  }
 
   constructor(readonly engine: ShruthiEngine) {}
 

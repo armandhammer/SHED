@@ -80,8 +80,10 @@ export const MODIFIERS = [
 
 export const ARP_MODES = ['step seq', 'arpeggio', 'pattern'] as const;
 export const ARP_DIRECTIONS = ['up', 'down', 'up&down', 'played', 'random', 'chord'] as const;
-export const POLYPHONY_MODES = ['mono', 'poly', '2x unison', 'cyclic', 'chain'] as const;
-export const SPREAD_MODES = ['stack', 'center', 'wide'] as const;
+export const POLYPHONY_MODES = ['mono', 'poly', '2x unison', 'cyclic', 'chain', '3x unison', '4x unison'] as const;
+export const SPREAD_MODES = ['stack', 'center', 'wide', 'sub oct'] as const;
+/** YAM+ 0.2 (BAMBI): 3x/4x unison (polyphony 5, 6) and the sub-octave spread mode (3). */
+export const YAMPLUS_0_2 = 0x02;
 export const NUM_ARP_PATTERNS = 22;
 export const RAGAS = [
   'equal', 'just', 'pythagorean', '1/4 eb', '1/4 e', '1/4 ea',
@@ -107,6 +109,7 @@ interface Spec {
   cc?: number;
   instance?: number;
   since?: 'yamplus';
+  valuesSince?: { from: number; yamPlus: number };
 }
 
 const defs: ParamDef[] = [];
@@ -216,8 +219,8 @@ add(123, { id: 'arp.resolution', name: 'Arp grid', short: 'grid', group: 'arp', 
 for (let i = 0; i < 3; i++) {
   add(124 + i, { id: `seq.length${i + 1}`, name: i < 2 ? `Seq ${i + 1} length` : 'Pattern length', short: i < 2 ? `len${i + 1}` : 'lenp', group: 'seq', unit: 'uint', min: 1, max: 32, instance: i });
 }
-add(127, { id: 'part.polyphony', name: 'Voice mode', short: 'mode', group: 'part', ...e(POLYPHONY_MODES), cc: 107 });
-add(192, { id: 'part.spreadMode', name: 'Spread mode', short: 'sprm', group: 'part', ...e(SPREAD_MODES), cc: 114, since: 'yamplus' });
+add(127, { id: 'part.polyphony', name: 'Voice mode', short: 'mode', group: 'part', ...e(POLYPHONY_MODES), cc: 107, valuesSince: { from: 5, yamPlus: YAMPLUS_0_2 } });
+add(192, { id: 'part.spreadMode', name: 'Spread mode', short: 'sprm', group: 'part', ...e(SPREAD_MODES), cc: 114, since: 'yamplus', valuesSince: { from: 3, yamPlus: YAMPLUS_0_2 } });
 
 export const AMBIKA_PARAMS: readonly ParamDef[] = defs.sort((a, b) => a.address - b.address);
 

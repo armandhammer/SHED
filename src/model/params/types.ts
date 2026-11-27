@@ -33,6 +33,11 @@ export interface ParamDef {
   readonly instance?: number;
   /** Present only in BAMBI (YAM+) / SHOOZ; a harmless no-op on stock YAM. */
   readonly since?: 'yamplus' | 'shooz';
+  /**
+   * Enum values from `from` up exist only in BAMBI with a YAM+ version of at
+   * least `yamPlus` (major << 4 | minor, as in the 0x1c version reply).
+   */
+  readonly valuesSince?: { readonly from: number; readonly yamPlus: number };
   /** Default value used by the init patch. */
   readonly init?: number;
 }

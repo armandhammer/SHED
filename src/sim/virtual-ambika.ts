@@ -35,7 +35,7 @@ import {
   txChannel,
   type PartMapping,
 } from '../model/params/ambika';
-import { clamp, fromByte, toByte } from '../model/params/types';
+import { clamp, fromByte, toByte, type ParamDef } from '../model/params/types';
 import { CMD, StorageObject } from '../protocol/ambika';
 
 export type OutMode = 'thru' | 'sequencer' | 'controllr' | 'chain' | 'full';
@@ -46,6 +46,8 @@ export const IN_FILTER = { sysex: 1, programChange: 2, nrpn: 4, cc: 8 } as const
 
 export interface VirtualAmbikaOptions {
   firmware: 'stock' | 'yamplus';
+  /** YAM+ version reported by BAMBI (major << 4 | minor), default 0.2. */
+  yamPlusVersion?: number;
   outMode?: OutMode;
   inFilter?: number;
   /** Called with each message the synth sends (one complete MIDI message). */
@@ -71,6 +73,7 @@ function initMulti(): Uint8Array {
 
 export class VirtualAmbika {
   firmware: 'stock' | 'yamplus';
+  yamPlusVersion: number;
   outMode: OutMode;
   inFilter: number;
   activePart = 0;
@@ -86,6 +89,7 @@ export class VirtualAmbika {
 
   constructor(options: VirtualAmbikaOptions) {
     this.firmware = options.firmware;
+    this.yamPlusVersion = options.yamPlusVersion ?? 0x02;
     this.outMode = options.outMode ?? 'controllr';
     this.inFilter = options.inFilter ?? 0;
     this.send = options.send;
@@ -151,10 +155,10 @@ export class VirtualAmbika {
         let byte: number;
         if (controller === 38) {
           const raw = value | p.dataEntryMsb;
-          byte = def ? toByte(def, fromByte(def, raw)) : raw;
+          byte = def ? this.toFirmwareByte(def, fromByte(def, raw)) : raw;
         } else {
           if (!def) return;
-          byte = toByte(def, fromByte(def, this.byte(part, address)) + (controller === 96 ? 1 : -1));
+          byte = this.toFirmwareByte(def, fromByte(def, this.byte(part, address)) + (controller === 96 ? 1 : -1));
         }
         if (!(this.inFilter & IN_FILTER.nrpn)) this.setValue(part, address, byte, false);
         return;
@@ -319,9 +323,22 @@ export class VirtualAmbika {
 
   private versionPayload(): Uint8Array {
     const p = new Uint8Array(6 + 2 * NUM_PARTS);
-    p.set([1, 0x10, 0x01, NUM_OSC_SHAPES, 1, 1]);
-    for (let i = 0; i < NUM_PARTS; i++) p.set([i + 1, 0x11], 6 + 2 * i);
+    p.set([1, 0x10, this.yamPlusVersion, NUM_OSC_SHAPES, 1, 1]);
+    const voicecard = this.yamPlusVersion >= 0x02 ? 0x12 : 0x11;
+    for (let i = 0; i < NUM_PARTS; i++) p.set([i + 1, voicecard], 6 + 2 * i);
     return p;
+  }
+
+  /**
+   * Clamps to the parameter range of this firmware: enum values newer than
+   * it (polyphony 5–6, spread mode 3 before YAM+ 0.2) stop at its maximum,
+   * as the firmware's parameter table would.
+   */
+  private toFirmwareByte(def: ParamDef, value: number): number {
+    let v = clamp(def, value);
+    const gate = def.valuesSince;
+    if (gate && (this.firmware === 'stock' || this.yamPlusVersion < gate.yamPlus)) v = Math.min(v, gate.from - 1);
+    return toByte(def, v);
   }
 
   // -------------------------------------------------------------------------
@@ -339,7 +356,7 @@ export class VirtualAmbika {
   turnKnob(part: number, address: number, value: number): void {
     const def = paramAt(address);
     if (!def) throw new Error(`no parameter at ${address}`);
-    this.setValue(part, address, toByte(def, clamp(def, value)), true);
+    this.setValue(part, address, this.toFirmwareByte(def, value), true);
   }
 
   /** Selects the part the front panel shows (argument 0 in SysEx means this part). */
