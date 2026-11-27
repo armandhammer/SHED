@@ -920,6 +920,18 @@ input[type='text'] {
   width: auto;
   align-self: flex-start;
 }
+/* Voice LFO: trigger LEDs and the slew knob side by side. */
+.lfo-extra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.lfo-extra > .knob {
+  flex-direction: row;
+  width: auto;
+}
 .lfo-head {
   display: flex;
   flex-direction: column;

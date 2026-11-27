@@ -181,7 +181,12 @@ function lfoGlyph(reg: ControlRegistry, id: string): HTMLElement {
 function lfoCard(reg: ControlRegistry, n: 1 | 2 | 3 | 4): HTMLElement {
   const name = n === 4 ? 'Voice' : `LFO ${n}`;
   const shape = menu(reg, p(`lfo${n}.shape`), `${name} shape`, { hideLabel: true, adornment: lfoGlyph(reg, `lfo${n}.shape`) });
-  const extra = n === 4 ? k(reg, 'voice.vintage', 'Vintage', 'sm') : leds(reg, p(`lfo${n}.sync`), 'Trigger', { hideLabel: true, small: true });
+  // The voice LFO's trigger (BAMBI 0.4) has a "once" (one-shot) value
+  // instead of lfo→env, and a slew knob.
+  const extra =
+    n === 4
+      ? h('div', { class: 'lfo-extra' }, leds(reg, p('lfo4.trigger'), 'Trigger', { hideLabel: true, small: true }), k(reg, 'lfo4.slew', 'Slew', 'sm'))
+      : leds(reg, p(`lfo${n}.sync`), 'Trigger', { hideLabel: true, small: true });
   return h(
     'div',
     { class: 'lfo-card' },
@@ -412,6 +417,8 @@ function part(reg: ControlRegistry, mappingInfo: HTMLElement): HTMLElement {
       leds(reg, p('part.spreadMode'), 'Spread mode'),
     ),
     row('controls', leds(reg, p('part.stealMode'), 'Voice steal'), ledToggle(reg, p('part.legato'), 'Legato')),
+    // Patch settings, voice-wide: shown with the part's playing controls.
+    row('controls', leds(reg, p('voice.velocityCurve'), 'Velocity curve'), k(reg, 'voice.vintage', 'Vintage')),
     row('controls', k(reg, 'part.volume', 'Volume'), k(reg, 'part.octave', 'Octave'), k(reg, 'part.tuning', 'Tuning'), k(reg, 'part.spread', 'Spread'), k(reg, 'part.portamento', 'Glide')),
   );
 }

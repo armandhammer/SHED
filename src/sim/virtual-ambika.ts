@@ -89,7 +89,7 @@ export class VirtualAmbika {
 
   constructor(options: VirtualAmbikaOptions) {
     this.firmware = options.firmware;
-    this.yamPlusVersion = options.yamPlusVersion ?? 0x03;
+    this.yamPlusVersion = options.yamPlusVersion ?? 0x04;
     this.outMode = options.outMode ?? 'controllr';
     this.inFilter = options.inFilter ?? 0;
     this.send = options.send;
@@ -323,8 +323,9 @@ export class VirtualAmbika {
 
   private versionPayload(): Uint8Array {
     const p = new Uint8Array(6 + 2 * NUM_PARTS);
-    p.set([1, 0x10, this.yamPlusVersion, NUM_OSC_SHAPES, 1, this.yamPlusVersion >= 0x03 ? 2 : 1]);
-    const voicecard = this.yamPlusVersion >= 0x02 ? 0x12 : 0x11;
+    const patchLayout = this.yamPlusVersion >= 0x04 ? 2 : 1;
+    p.set([1, 0x10, this.yamPlusVersion, NUM_OSC_SHAPES, patchLayout, this.yamPlusVersion >= 0x03 ? 2 : 1]);
+    const voicecard = this.yamPlusVersion >= 0x04 ? 0x13 : this.yamPlusVersion >= 0x02 ? 0x12 : 0x11;
     for (let i = 0; i < NUM_PARTS; i++) p.set([i + 1, voicecard], 6 + 2 * i);
     return p;
   }

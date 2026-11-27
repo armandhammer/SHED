@@ -110,6 +110,12 @@ On connect, SHED sends the BAMBI version request (SysEx `0x1c`).
   out, and a library part that uses them loads as `2x unison` / `center`.
   BAMBI 0.3 adds `Voice steal` (which held note a full part cuts: oldest,
   lowest, highest or none); older firmware always steals the oldest.
+  BAMBI 0.4 adds the voice LFO `Trigger` (free, env→lfo, once = one-shot)
+  and `Slew` on the Voice LFO card, and the `Velocity curve` (linear, soft,
+  hard) in the Part section. On older firmware they are greyed out, and a
+  library patch that uses them loads with the stock behaviour (free, no slew,
+  linear). Testing without hardware: `?virtual=bambi&bambi=0.3` simulates an
+  older BAMBI release.
 - **No reply within 700 ms** means stock YAM (or another Ambika firmware). The
   `+` parameters are disabled, and SHED sends one request at a time so it
   always knows which part a reply belongs to. Stock YAM doesn't know the

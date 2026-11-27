@@ -88,6 +88,12 @@ export const YAMPLUS_0_2 = 0x02;
 export const STEAL_MODES = ['oldest', 'lowest', 'highest', 'none'] as const;
 /** YAM+ 0.3 (BAMBI): the voice steal mode (part byte 81, part layout 2). */
 export const YAMPLUS_0_3 = 0x03;
+/** BAMBI `VoiceLfoMode` (patch byte 110): `free`, `env~lfo`, `once` on the front panel. */
+export const VOICE_LFO_MODES = ['free', 'env→lfo', 'once'] as const;
+/** BAMBI `VelocityCurve` (patch byte 30): `lin`, `soft`, `hard` on the front panel. */
+export const VELOCITY_CURVES = ['linear', 'soft', 'hard'] as const;
+/** YAM+ 0.4 (BAMBI): voice LFO trigger and slew, velocity curve (patch layout 2). */
+export const YAMPLUS_0_4 = 0x04;
 export const NUM_ARP_PATTERNS = 22;
 export const RAGAS = [
   'equal', 'just', 'pythagorean', '1/4 eb', '1/4 e', '1/4 ea',
@@ -158,7 +164,8 @@ add(21, { id: 'filter2.mode', name: 'Filter 2 mode', short: 'mode', group: 'filt
 add(22, { id: 'filter.env', name: 'Env 2 → cutoff', short: 'env2', group: 'filter', unit: 'uint', min: 0, max: 63, cc: 3 });
 add(23, { id: 'filter.lfo', name: 'LFO 2 → cutoff', short: 'lfo2', group: 'filter', unit: 'uint', min: 0, max: 63, cc: 9 });
 
-// Envelopes and LFOs: 24–47, stride 8. Byte 30 + 8n is padding.
+// Envelopes and LFOs: 24–47, stride 8. Byte 30 + 8n is padding (BAMBI 0.4
+// uses byte 30 for the velocity curve, below).
 for (let i = 0; i < 3; i++) {
   const base = 24 + i * 8;
   const env = `env${i + 1}`;
@@ -200,11 +207,17 @@ for (let i = 0; i < 4; i++) {
 add(104, { id: 'filter.velocity', name: 'Velocity → cutoff', short: 'velo', group: 'filter', unit: 'uint', min: 0, max: 63, cc: 108 });
 add(105, { id: 'filter.keytrack', name: 'Keyboard → cutoff', short: 'keyb', group: 'filter', unit: 'int', min: -63, max: 63, cc: 109 });
 
-// BAMBI (YAM+) additions: 106–109. Bytes 110–111 are spare.
+// BAMBI (YAM+) additions: 106–111, and 30.
 for (let i = 0; i < 3; i++) {
   add(106 + i, { id: `env${i + 1}.curve`, name: `Env ${i + 1} curve`, short: `crv${i + 1}`, group: `env${i + 1}`, unit: 'uint', min: 0, max: 127, cc: 110 + i, instance: i, since: 'yamplus' });
 }
 add(109, { id: 'voice.vintage', name: 'Vintage', short: 'vint', group: 'voice', unit: 'uint', min: 0, max: 127, cc: 113, since: 'yamplus' });
+// BAMBI 0.4. Older firmware ignores these NRPNs and plays as if they were 0,
+// so every other value is gated (the whole parameter, in effect).
+const SINCE_0_4 = { from: 1, yamPlus: YAMPLUS_0_4, fallback: 0 };
+add(110, { id: 'lfo4.trigger', name: 'Voice LFO trigger', short: 'trig', group: 'lfo4', ...e(VOICE_LFO_MODES), cc: 116, since: 'yamplus', valuesSince: SINCE_0_4 });
+add(111, { id: 'lfo4.slew', name: 'Voice LFO slew', short: 'slew', group: 'lfo4', unit: 'uint', min: 0, max: 127, cc: 117, since: 'yamplus', valuesSince: SINCE_0_4 });
+add(30, { id: 'voice.velocityCurve', name: 'Velocity curve', short: 'velo', group: 'voice', ...e(VELOCITY_CURVES), cc: 118, since: 'yamplus', valuesSince: SINCE_0_4 });
 
 // Part: 112–127, 192–193.
 add(112, { id: 'part.volume', name: 'Volume', short: 'volu', group: 'part', unit: 'raw', min: 0, max: 127, cc: 7 });
