@@ -19,8 +19,8 @@ export interface ControlEngine {
   supports(def: ParamDef): boolean;
   beginDrag(part: number, address: number): void;
   endDrag(part: number, address: number): void;
-  /** Highest selectable Ambika oscillator shape. */
-  readonly oscShapeMax: number;
+  /** Highest value the connected firmware accepts (enum values added later). */
+  valueMax(def: ParamDef): number;
 }
 
 /** Keeps every on-screen control in step with the selected part's model. */
@@ -306,7 +306,9 @@ export function menu(reg: ControlRegistry, def: ParamDef, label = def.name, opts
     list,
   );
 
-  const maxValue = () => (isOscShape ? reg.engine.oscShapeMax : def.max);
+  const maxValue = () => reg.engine.valueMax(def);
+  const bambiValue = (v: number) =>
+    isOscShape ? v >= FIRST_BAMBI_SHAPE : def.valuesSince !== undefined && v >= def.valuesSince.from;
   const choose = (v: number) => {
     if (v !== reg.value(def)) reg.set(def, v);
   };
@@ -327,7 +329,7 @@ export function menu(reg: ControlRegistry, def: ParamDef, label = def.name, opts
         },
       },
       h('span', {}, formatValue(def, v)),
-      isOscShape && v >= FIRST_BAMBI_SHAPE ? h('span', { class: 'menu-mark', title: 'BAMBI voicecard shape' }, '+') : null,
+      bambiValue(v) ? h('span', { class: 'menu-mark', title: isOscShape ? 'BAMBI voicecard shape' : 'BAMBI 0.2 value' }, '+') : null,
     );
 
   const fill = () => {
@@ -401,7 +403,7 @@ export function menu(reg: ControlRegistry, def: ParamDef, label = def.name, opts
   reg.register(def.address, () => {
     const v = reg.value(def);
     valueText.textContent = formatValue(def, v);
-    mark.textContent = isOscShape && v >= FIRST_BAMBI_SHAPE ? '+' : '';
+    mark.textContent = bambiValue(v) ? '+' : '';
     if (!list.hidden) fill();
   });
   bind(reg, def, el, (supported) => {
@@ -434,7 +436,7 @@ export function leds(reg: ControlRegistry, def: ParamDef, label = def.name, opts
     const dir = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
     if (!dir) return;
     e.preventDefault();
-    const v = stepEnum(def, reg.value(def), dir as 1 | -1);
+    const v = stepEnum(def, reg.value(def), dir as 1 | -1, reg.engine.valueMax(def));
     reg.set(def, v);
     buttons[v - def.min]?.focus();
   });
@@ -449,7 +451,8 @@ export function leds(reg: ControlRegistry, def: ParamDef, label = def.name, opts
       b.tabIndex = on ? 0 : -1;
     });
   });
-  bind(reg, def, el, (ok) => buttons.forEach((b) => (b.disabled = !ok)));
+  // Values the connected firmware doesn't have stay visible but disabled.
+  bind(reg, def, el, (ok) => buttons.forEach((b, i) => (b.disabled = !ok || def.min + i > reg.engine.valueMax(def))));
   return el;
 }
 

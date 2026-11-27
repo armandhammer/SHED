@@ -126,6 +126,32 @@ export class SyncEngine extends Emitter<EngineEvents> {
     return !def.since || this.client.mode !== 'stock';
   }
 
+  /**
+   * Highest value the connected firmware accepts for `def`: the oscillator
+   * shape count from the version reply, and `valuesSince` gates (newer BAMBI
+   * enum values). Permissive until the firmware is known.
+   */
+  valueMax(def: ParamDef): number {
+    if (def.id.endsWith('.shape') && def.group.startsWith('osc')) return this.oscShapeMax;
+    if (this.lacksValues(def)) return def.valuesSince!.from - 1;
+    return def.max;
+  }
+
+  /** True if the connected firmware predates the def's `valuesSince` values. */
+  private lacksValues(def: ParamDef): boolean {
+    const gate = def.valuesSince;
+    if (!gate) return false;
+    const mode = this.client.mode;
+    return mode === 'stock' || (mode === 'yamplus' && (this.client.firmware?.yamPlusVersion ?? 0) < gate.yamPlus);
+  }
+
+  /** `value` as the connected firmware can take it: newer enum values become their fallback. */
+  private forFirmware(def: ParamDef, value: number): number {
+    const v = clamp(def, value);
+    if (def.valuesSince && v >= def.valuesSince.from && this.lacksValues(def)) return def.valuesSince.fallback;
+    return Math.min(v, this.valueMax(def));
+  }
+
   /** Highest selectable oscillator shape (from the BAMBI version reply, else all 43). */
   get oscShapeMax(): number {
     const n = this.client.firmware?.oscShapes;
@@ -170,8 +196,7 @@ export class SyncEngine extends Emitter<EngineEvents> {
 
   /** Sets a parameter from the UI (display value) and sends it as NRPN. */
   set(part: number, def: ParamDef, value: number): void {
-    let v = clamp(def, value);
-    if (def.id.endsWith('.shape') && def.group.startsWith('osc')) v = Math.min(v, this.oscShapeMax);
+    const v = this.forFirmware(def, value);
     this.setByte(part, def.address, toByte(def, v));
   }
 
@@ -237,6 +262,14 @@ export class SyncEngine extends Emitter<EngineEvents> {
       // Keep the hardware's sequencer data: only the settings travel as NRPN.
       this.parts[part].part.set(partData.subarray(0, 16), 0);
       this.parts[part].part[80] = partData[80];
+      // A part saved from newer BAMBI firmware: values this synth lacks
+      // become the closest older one (4x unison -> 2x unison on stock YAM;
+      // the firmware itself would clamp to its maximum, chain).
+      for (const def of AMBIKA_PARAMS) {
+        if (def.level !== 'part' || !def.valuesSince) continue;
+        const i = def.address - PART_BASE;
+        this.parts[part].part[i] = this.forFirmware(def, this.parts[part].part[i]);
+      }
     }
     this.emit('part', { part, origin: 'load' });
     this.pushPatch(part);
