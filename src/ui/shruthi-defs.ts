@@ -3,6 +3,8 @@
 // can be unit-tested.
 
 import {
+  FILTER_PROFILES,
+  FILTER_PROFILE_NAMES,
   SHRUTHI_MOD_ROWS,
   SHRUTHI_PARAMS,
   shruthiParam,
@@ -33,6 +35,7 @@ const LABELS: Record<string, string[]> = {
   'sys.midiChannel': ['omni', ...Array.from({ length: 16 }, (_, i) => String(i + 1))],
   'env1.curve': ['0 exp', '1', '2', '3', '4 lin', '5', '6', '7 inv'],
   'env2.curve': ['0 exp', '1', '2', '3', '4 lin', '5', '6', '7 inv'],
+  'sys.filterProfile': FILTER_PROFILES.map((p) => FILTER_PROFILE_NAMES[p]),
 };
 
 /** A Shruthi parameter as a ParamDef, optionally moved to another address (mod rows, operators). */

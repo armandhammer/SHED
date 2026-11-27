@@ -13,6 +13,9 @@
 //     leaves the sound and renames it "--------".
 //   - SHOOZ clamps everything it loads to the parameter ranges
 //     (`Part::SanitizeParameters`); stock doesn't.
+//   - SHOOZ filter calibration (offsets 159–161): set by NRPN, reported at
+//     the end of the version reply, saved by a system dump (0x04) into
+//     `savedFilterCal` (the EEPROM). Stock has no parameters past 156.
 //   - NRPN reception (`Part::ControlChange`), with the firmware's 8-bit
 //     latches: MSB 1 adds 128 to the address and to the value; values out
 //     of range are ignored; data increment/decrement step the parameter.
@@ -93,7 +96,7 @@ export interface VirtualShruthiOptions {
 
 export class VirtualShruthi {
   readonly firmware: 'stock' | 'shooz';
-  /** Parameter address space: patch RAM 0–99, sequencer 100–141, system 142–156, curves 157–158. */
+  /** Parameter address space: patch RAM 0–99, sequencer 100–141, system 142–156, curves 157–158, filter calibration 159–161. */
   readonly mem = new Uint8Array(SHRUTHI_ADDRESS_SPACE);
   readonly banks: number;
   /** Stored patches and sequences by slot (wire format). */
@@ -104,6 +107,8 @@ export class VirtualShruthi {
   sysexStatus = ' ';
   freeStack = 200;
   glitches = 0;
+  /** The filter calibration as last saved (EEPROM bytes 2045–2047); null: never saved. */
+  savedFilterCal: Uint8Array | null = null;
   private bank = 0;
   private nrpn = 0xff;
   private nrpnMsb = 0;
@@ -118,6 +123,7 @@ export class VirtualShruthi {
     this.mem.set(unpackPatch(shruthiInitPatch()), 0);
     this.mem.set(shruthiInitSequencer(), SEQ);
     this.mem.set(shruthiInitSystem(), SYS);
+    this.mem[SHRUTHI_OFFSET.filterResonanceMax] = 127;
     if (options.outMode !== undefined) this.mem[SYS_MIDI_OUT] = options.outMode;
   }
 
@@ -199,6 +205,8 @@ export class VirtualShruthi {
         if (this.nrpn === 0xff) return;
         const p = nrpnParam(this.nrpn);
         if (!p) return;
+        // Stock YAM's offset table has nothing for the SHOOZ curves and calibration.
+        if (this.firmware === 'stock' && this.nrpn >= SHRUTHI_OFFSET.envCurve1) return;
         if (controller === 38) {
           const display = shruthiFromByte(p, v);
           if (display >= p.min && display <= p.max) this.mem[this.nrpn] = v;
@@ -310,6 +318,9 @@ export class VirtualShruthi {
       case SHRUTHI_CMD.system:
         this.mem.set(payload, SYS);
         this.sanitize();
+        if (this.firmware === 'shooz') {
+          this.savedFilterCal = this.mem.slice(SHRUTHI_OFFSET.filterProfile, SHRUTHI_OFFSET.filterResonanceMax + 1);
+        }
         return true;
       case SHRUTHI_CMD.step:
         this.mem.set(payload, SEQ_STEPS + 2 * (argument & 0x0f));
@@ -355,7 +366,8 @@ export class VirtualShruthi {
         const reply =
           this.firmware === 'shooz'
             ? [a, b, SHRUTHI_FIRMWARE.family, SHRUTHI_FIRMWARE.version, SHRUTHI_FIRMWARE.waveforms,
-               SHRUTHI_FIRMWARE.patch_layout, this.freeStack, this.glitches]
+               SHRUTHI_FIRMWARE.patch_layout, this.freeStack, this.glitches,
+               ...this.mem.subarray(SHRUTHI_OFFSET.filterProfile, SHRUTHI_OFFSET.filterResonanceMax + 1)]
             : [a, b];
         this.reply(SHRUTHI_CMD.versionReply, 0, reply);
         return true;
@@ -408,7 +420,7 @@ export class VirtualShruthi {
   /** `Part::SanitizeParameters` (SHOOZ only). */
   private sanitize(): void {
     if (this.firmware !== 'shooz') return;
-    for (let offset = 0; offset < SHRUTHI_OFFSET.envCurve1; offset++) {
+    for (let offset = 0; offset < SHRUTHI_ADDRESS_SPACE; offset++) {
       if (offset === 84 || offset === 85 || offset === 92 || offset === 93) continue;
       const p = nrpnParam(offset);
       if (p) this.mem[offset] = shruthiClamp(p, this.mem[offset]);

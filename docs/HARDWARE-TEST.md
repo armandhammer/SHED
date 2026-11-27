@@ -133,6 +133,15 @@ have (SMR4, CS-80, IR3109, Polivoks). Select **Shruthi-1** in the Synth menu.
 - [ ] Filter board: change it in SHED's System section: the board's page
       appears under Filter (SVF: 2nd cutoff and modes; Polivoks: overdrive
       and FM). Note which setting each physical board (CS-80, IR3109) uses.
+- [ ] SHOOZ filter calibration: set a profile on the Shruthi's **filter cal**
+      page (4th system page) and save it there, then reconnect SHED: the
+      System section's Filter calibration row shows it. Change the profile
+      and resonance max in SHED (the sound follows), click **Save system**,
+      power-cycle the Shruthi: its filter cal page shows SHED's values, and
+      MIDI channel, filter board and the other system settings are
+      unchanged.
+- [ ] **Save system** before any Pull (Reconnect with the Shruthi off, then
+      turn it on): SHED refuses and asks for a Pull.
 - [ ] MIDI out `thru` (factory setting): edits still reach the synth, the log
       says SHED ignores the echoes, nothing jumps back.
 - [ ] Write… slot 16: confirm, then load patch 16 on the Shruthi: it's the

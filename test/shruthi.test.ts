@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   FILTER_BOARDS,
-  SHRUTHI_OFFSET,
+  SHRUTHI_ADDRESS_SPACE,
   SHRUTHI_PARAMS,
   SHRUTHI_PATCH_RAM_SIZE,
   ccParam,
@@ -26,14 +26,15 @@ import {
 } from '../src/protocol/shruthi';
 
 describe('Shruthi parameter map', () => {
-  it('has the firmware table: 94 parameters, one label per value', () => {
-    expect(SHRUTHI_PARAMS).toHaveLength(94);
+  it('has the firmware table: 98 parameters, one label per value', () => {
+    expect(SHRUTHI_PARAMS).toHaveLength(98);
     for (const p of SHRUTHI_PARAMS) {
       expect(p.labels, p.id).toHaveLength(p.max - p.min + 1);
       expect(p.min, p.id).toBeLessThanOrEqual(p.max);
-      expect(p.address, p.id).toBeLessThanOrEqual(SHRUTHI_OFFSET.envCurve2);
+      expect(p.address, p.id).toBeLessThan(SHRUTHI_ADDRESS_SPACE);
     }
-    expect(new Set(SHRUTHI_PARAMS.map((p) => p.id)).size).toBe(94);
+    expect(new Set(SHRUTHI_PARAMS.map((p) => p.id)).size).toBe(98);
+    expect(SHRUTHI_ADDRESS_SPACE).toBe(162);
   });
 
   it('agrees with the firmware on which parameter owns each NRPN offset', () => {
@@ -152,3 +153,26 @@ describe('Shruthi patch codec', () => {
     expect(() => parseShruthiVersion(Uint8Array.of(1))).toThrow();
   });
 });
+
+describe('Shruthi version reply', () => {
+  it('reads the SHOOZ filter calibration bytes when present', () => {
+    const base = [1, 0, 2, 0x01, 44, 1, 180, 0];
+    expect(parseShruthiVersion(Uint8Array.from(base)).shooz?.filterCal).toBeUndefined();
+    expect(parseShruthiVersion(Uint8Array.from([...base, 2, 0xf6, 99])).shooz?.filterCal).toEqual([2, 0xf6, 99]);
+    expect(parseShruthiVersion(Uint8Array.from([1, 0])).shooz).toBeUndefined();
+  });
+
+  it('maps the calibration parameters onto the firmware offsets', () => {
+    expect(shruthiParam('sys.filterProfile').address).toBe(159);
+    expect(shruthiParam('sys.filterProfile').section).toBe('calibration');
+    expect(shruthiParam('sys.filterProfile').labels).toEqual(['off', 'cs80', 'ir31', 'pvk', 'smr4']);
+    expect(shruthiParam('sys.filterCutoffOffset')).toMatchObject({ address: 160, unit: 'int', min: -63, max: 63 });
+    expect(shruthiParam('sys.filterResonanceMax')).toMatchObject({ address: 161, min: 0, max: 127 });
+    // The knob-4 repeat owns the offset, as in the firmware's offset table.
+    expect(nrpnParam(161)).toMatchObject({ address: 161, min: 0, max: 127 });
+    expect(nrpnParam(162)).toBeUndefined();
+    // The raga list still ends where the firmware's does (string table order).
+    expect(shruthiLabel(shruthiParam('sys.raga'), 32)).toBe('rasia');
+  });
+});
+

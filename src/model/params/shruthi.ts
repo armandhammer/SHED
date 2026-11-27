@@ -9,8 +9,11 @@
 //
 // Addressing (`shruthi/part.h`, `parameter.h`):
 //   - every parameter is a byte offset into the RAM image patch (0–99),
-//     sequencer settings (100–141), system settings (142–156) and the SHOOZ
-//     envelope curves (157–158); NRPN number = offset (MSB 1 = +128);
+//     sequencer settings (100–141), system settings (142–156), the SHOOZ
+//     envelope curves (157–158) and the SHOOZ filter calibration (159–161:
+//     profile, cutoff offset, resonance max; per unit, saved in its own
+//     EEPROM bytes, read back from the version reply); NRPN number = offset
+//     (MSB 1 = +128);
 //   - the 92-byte wire patch is the RAM image's first 92 bytes, with the
 //     filter modes (92–93) packed into byte 86 and the two operators (94–99)
 //     into bytes 87–90 (`Patch::PrepareForWrite`);
@@ -38,12 +41,15 @@ export const SHRUTHI_OFFSET = {
   envCurve1: table.offsets.env_curve_1,
   envCurve2: table.offsets.env_curve_2,
   vintage: table.offsets.sys_vintage,
+  filterProfile: table.offsets.filter_profile,
+  filterCutoffOffset: table.offsets.filter_cutoff_offset,
+  filterResonanceMax: table.offsets.filter_resonance_max,
   /** System settings from here on are never echoed by OnEdit. */
   masterTuning: table.offsets.sys + 4,
 } as const;
 
-/** Total size of the parameter address space (offsets 0–158). */
-export const SHRUTHI_ADDRESS_SPACE = SHRUTHI_OFFSET.envCurve2 + 1;
+/** Total size of the parameter address space (offsets 0–161). */
+export const SHRUTHI_ADDRESS_SPACE = SHRUTHI_OFFSET.filterResonanceMax + 1;
 
 export const SHRUTHI_FIRMWARE = table.firmware;
 
@@ -62,10 +68,22 @@ export const FILTER_BOARD_NAMES: Record<FilterBoard, string> = {
   sp: 'Steiner-Parker',
 };
 
-export type ShruthiSection = 'patch' | 'sequencer' | 'system' | 'curve';
+/** SHOOZ filter calibration profiles (`sys.filterProfile`, UNIT_FILTER_PROFILE). */
+export const FILTER_PROFILES = ['off', 'cs80', 'ir31', 'pvk', 'smr4'] as const;
+export type FilterProfile = (typeof FILTER_PROFILES)[number];
+
+export const FILTER_PROFILE_NAMES: Record<FilterProfile, string> = {
+  off: 'Off (stock response)',
+  cs80: 'CS-80',
+  ir31: 'IR3109',
+  pvk: 'Polivoks',
+  smr4: 'SMR4',
+};
+
+export type ShruthiSection = 'patch' | 'sequencer' | 'system' | 'curve' | 'calibration';
 
 export interface ShruthiParam {
-  /** Index in the firmware parameter table (0–93). */
+  /** Index in the firmware parameter table (0–97). */
   readonly index: number;
   /** Byte offset = NRPN number. */
   readonly address: number;
@@ -194,6 +212,10 @@ const EXTRA: Extra[] = [
   ['env2.curve', 'Envelope curves'],
   ['env2.curve#2', 'Envelope curves'],
   ['env2.curve#3', 'Envelope curves'],
+  ['sys.filterProfile', 'Filter calibration'],
+  ['sys.filterCutoffOffset', 'Filter calibration'],
+  ['sys.filterResonanceMax', 'Filter calibration'],
+  ['sys.filterResonanceMax#3', 'Filter calibration'],
 ];
 
 const UNIT_MAP: Record<string, ParamUnit> = {
@@ -206,6 +228,7 @@ const UNIT_MAP: Record<string, ParamUnit> = {
 };
 
 function sectionOf(address: number): ShruthiSection {
+  if (address >= SHRUTHI_OFFSET.filterProfile) return 'calibration';
   if (address >= SHRUTHI_OFFSET.envCurve1) return 'curve';
   if (address >= SHRUTHI_OFFSET.system) return 'system';
   if (address >= SHRUTHI_OFFSET.sequencer) return 'sequencer';
@@ -232,7 +255,9 @@ export const SHRUTHI_PARAMS: readonly ShruthiParam[] = table.parameters.map((p) 
     ...(p.cc[1] ? { cc2: p.cc[1] } : {}),
     nrpnOwner: p.nrpn_owner === 1,
     ...(boards ? { boards } : {}),
-    ...(section === 'curve' || p.offset === SHRUTHI_OFFSET.vintage ? { since: 'shooz' as const } : {}),
+    ...(section === 'curve' || section === 'calibration' || p.offset === SHRUTHI_OFFSET.vintage
+      ? { since: 'shooz' as const }
+      : {}),
     ...(id === 'mod.row' || id === 'op.row' ? { uiOnly: true } : {}),
   };
 });
@@ -254,8 +279,8 @@ export function nrpnParam(address: number): ShruthiParam | undefined {
 }
 
 const nrpnTable: (ShruthiParam | undefined)[] = (() => {
-  const t: (ShruthiParam | undefined)[] = new Array(160).fill(undefined);
-  for (const p of SHRUTHI_PARAMS) if (p.address < 160) t[p.address] = p;
+  const t: (ShruthiParam | undefined)[] = new Array(SHRUTHI_ADDRESS_SPACE).fill(undefined);
+  for (const p of SHRUTHI_PARAMS) if (p.address < SHRUTHI_ADDRESS_SPACE) t[p.address] = p;
   // The firmware's own fix-ups, in its order.
   t[92] = SHRUTHI_PARAMS[84];
   t[93] = SHRUTHI_PARAMS[85];

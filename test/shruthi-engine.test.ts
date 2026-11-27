@@ -255,3 +255,68 @@ describe('ShruthiEngine', () => {
     expect(r.engine.hardwareEditsSeen).toBe(false);
   });
 });
+
+describe('ShruthiEngine: SHOOZ filter calibration', () => {
+  const PROFILE = SHRUTHI_OFFSET.filterProfile;
+  const OFFSET = SHRUTHI_OFFSET.filterCutoffOffset;
+  const RES_MAX = SHRUTHI_OFFSET.filterResonanceMax;
+
+  it('reads the calibration from the version reply on connect', async () => {
+    const r = rig({ firmware: 'shooz' });
+    r.synth.mem.set([4, 0xf6, 99], PROFILE); // smr4, -10, 99
+    const seen: number[] = [];
+    r.engine.on('param', ({ address, origin }) => origin === 'hardware' && seen.push(address));
+    await r.connect();
+    expect(r.engine.client.firmware?.shooz?.filterCal).toEqual([4, 0xf6, 99]);
+    expect(r.engine.value(shruthiParam('sys.filterProfile'))).toBe(4);
+    expect(r.engine.value(shruthiParam('sys.filterCutoffOffset'))).toBe(-10);
+    expect(r.engine.value(shruthiParam('sys.filterResonanceMax'))).toBe(99);
+    expect(seen).toEqual(expect.arrayContaining([PROFILE, OFFSET, RES_MAX]));
+  });
+
+  it('defaults match the firmware before anything is read', () => {
+    const r = rig({ firmware: 'shooz' });
+    expect([r.engine.byte(PROFILE), r.engine.byte(OFFSET), r.engine.byte(RES_MAX)]).toEqual([0, 0, 127]);
+    expect([r.synth.mem[PROFILE], r.synth.mem[OFFSET], r.synth.mem[RES_MAX]]).toEqual([0, 0, 127]);
+  });
+
+  it('edits go out as NRPN 159-161, signed offset included', async () => {
+    const r = rig({ firmware: 'shooz' });
+    await r.connect();
+    r.engine.set(shruthiParam('sys.filterProfile'), 2);
+    r.engine.set(shruthiParam('sys.filterCutoffOffset'), -63);
+    r.engine.set(shruthiParam('sys.filterResonanceMax'), 64);
+    r.engine.set(shruthiParam('sys.filterCutoffOffset'), -80); // clamped to -63
+    r.flush(EDIT_INTERVAL_MS * 4 + 200);
+    expect(r.synth.mem[PROFILE]).toBe(2);
+    expect(r.synth.mem[OFFSET]).toBe(0xc1);
+    expect(r.synth.mem[RES_MAX]).toBe(64);
+    // Live only: not saved yet.
+    expect(r.synth.savedFilterCal).toBeNull();
+  });
+
+  it('saves the system settings and the calibration only after reading them', async () => {
+    const r = rig({ firmware: 'shooz', channel: 5 });
+    expect(r.engine.saveSystem()).toBe(false); // would overwrite channel 5 with omni/1
+    await r.connect();
+    r.engine.set(shruthiParam('sys.filterProfile'), 1);
+    r.engine.set(shruthiParam('sys.vintage'), 40);
+    expect(r.engine.saveSystem()).toBe(true);
+    r.flush(1500);
+    expect(r.synth.sysexStatus).toBe('+');
+    expect(r.synth.mem[SHRUTHI_SYS.midiChannel]).toBe(5);
+    expect(r.synth.mem[SHRUTHI_OFFSET.vintage]).toBe(40);
+    expect(Array.from(r.synth.savedFilterCal ?? [])).toEqual([1, 0, 127]);
+  });
+
+  it('stock YAM: no calibration in the reply, NRPN ignored, controls disabled', async () => {
+    const r = rig({ firmware: 'stock' });
+    await r.connect();
+    expect(r.engine.client.firmware?.shooz).toBeUndefined();
+    expect(r.engine.supports(shruthiParam('sys.filterProfile'))).toBe(false);
+    r.engine.setByte(PROFILE, 3);
+    r.flush(400);
+    expect(r.synth.mem[PROFILE]).toBe(0);
+  });
+});
+

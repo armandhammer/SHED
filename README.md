@@ -126,18 +126,26 @@ system settings that matter for editing.
   System section or on the Shruthi; SHED follows. Boards without their own
   page (the standard SMR4 board, and boards that run as `lpf`) show the
   main filter controls only.
+- **Filter calibration (SHOOZ).** The System section's *Filter calibration*
+  row is SHOOZ's per-unit "filter cal" page: a profile for the board
+  (CS-80, IR3109, Polivoks, SMR4: resonance taper, level compensation and
+  cutoff shift), a cutoff offset to match several Shruthis, and a resonance
+  ceiling. SHED reads it from the version reply when it connects.
 - **SHOOZ vs stock YAM.** SHED sends the version request (SysEx `0x1c`) when
   it connects. SHOOZ answers with capability bytes; stock YAM answers
   without them, and SHED then disables the SHOOZ-only parameters (envelope
-  curve presets, vintage, marked **+**) and sends patches in the stock format.
+  curve presets, vintage, filter calibration, marked **+**) and sends patches in the stock format.
   No answer at all means no Shruthi on those ports, or the wrong MIDI channel.
 - **Following the knobs.** Set the Shruthi's **midi out** (system page) to
   `ctrl` or `full`. The factory setting `thru` only echoes SHED's own
   messages back, which SHED recognises and ignores.
 - **Push / Write.** Push sends the patch to the edit buffer; **Write…**
   stores the edit buffer in a slot on the Shruthi after a confirmation.
-  System settings change live and are saved from the Shruthi's own system
-  page.
+  System settings change live. **Save system** (next to the filter
+  calibration) sends them back as SysEx `0x04`, which the Shruthi saves;
+  SHOOZ saves the filter calibration with them. It works only after a Pull,
+  so SHED never overwrites the synth's settings with its defaults. Saving
+  on the Shruthi's own system page does the same.
 
 `?virtual=shooz` or `?virtual=shruthi` (stock YAM) connects to a simulated
 Shruthi ([src/sim/virtual-shruthi.ts](src/sim/virtual-shruthi.ts)), with

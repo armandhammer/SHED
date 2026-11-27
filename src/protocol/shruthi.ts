@@ -82,6 +82,8 @@ export interface ShruthiFirmware {
     patchLayout: number;
     freeStack: number;
     glitches: number;
+    /** Filter calibration bytes (profile, cutoff offset, resonance max), when the reply has them. */
+    filterCal?: [number, number, number];
   };
 }
 
@@ -96,9 +98,15 @@ export function parseShruthiVersion(payload: Uint8Array): ShruthiFirmware {
       patchLayout: payload[5],
       freeStack: payload[6],
       glitches: payload[7],
+      ...(payload.length >= 11 ? { filterCal: [payload[8], payload[9], payload[10]] as [number, number, number] } : {}),
     };
   }
   return info;
+}
+
+/** System settings (15 bytes) to the synth: applied and saved (SHOOZ also saves the filter calibration). */
+export function shruthiSystemDump(system: ArrayLike<number>): Uint8Array {
+  return encodeSysEx(DEVICE_SHRUTHI, SHRUTHI_CMD.system, 0, system);
 }
 
 export function shoozVersionString(v: number): string {
